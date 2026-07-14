@@ -8,70 +8,117 @@ use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
-    public function register(Request $request){
+    public function index(Request $request)
+    {
+        $perPage = $request->query("per_page", 10);
+        $users = User::select("id", "name", "email", "role")
+            ->paginate($perPage);
+        return response()->json(
+            [
+                "success" => true,
+                "message" => "Daftar user berhasil diambil",
+                "data" => $users->items(),
+                "meta" => [
+                    "current_page" => $users->currentPage(),
+                    "last_page" => $users->lastPage(),
+                    "per_page" => $users->perPage(),
+                    "total" => $users->total(),
+                ]
+            ],
+            200
+        );
+    }
+    public function register(Request $request)
+    {
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:8|confirmed',
-            'role' => 'required|in:buyer,seller',
+            "name" => "required|string|max:100",
+            "email" => "required|email|unique:users,email",
+            "password" => "required|min:8|confirmed",
+            "role" => "required|in:buyer,seller",
         ]);
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
+            "name" => $validated["name"],
+            "email" => $validated["email"],
+            "password" => Hash::make($validated["password"]),
 
-            'role' => $validated['role'] ?? 'buyer',
+            "role" => $validated["role"] ?? "buyer",
         ]);
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken("auth_token")->plainTextToken;
 
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ], 201);
+        return response()->json(
+            [
+                "user" => $user,
+                "token" => $token,
+            ],
+            201
+        );
     }
-    public function login(Request $request){
+    public function login(Request $request)
+    {
         $validated = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
+            "email" => "required|email",
+            "password" => "required",
         ]);
-        $user = User::where('email',$validated['email'])->first();
-        if (!$user || !Hash::check($validated['password'], $user->password)){
-            return response()->json(['massage' => 'invlid credentials'], 401);
+        $user = User::where("email", $validated["email"])->first();
+        if (!$user || !Hash::check($validated["password"], $user->password)) {
+            return response()->json(["message" => "invlid credentials"], 401);
         }
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $user->createToken("auth_token")->plainTextToken;
         return response()->json([
-            'user' => $user,
-            'token' => $token,
+            "user" => $user,
+            "token" => $token,
         ]);
     }
-    public function logout(Request $request){
-            $request->user()->currentAccessToken()->delete();
-            return response()->json(['message' => 'Logged out']);
+    public function logout(Request $request)
+    {
+        $request
+            ->user()
+            ->currentAccessToken()
+            ->delete();
+        return response()->json(["message" => "Logged out"]);
+    }
+    public function destroy($id)
+    {
+        $user = User::find($id);
+        if (!$user){
+            return response()->json(
+                [
+                "success" => false,
+                "message" => "Data tidak ditemukan",
+                ],
+            404);
+        }
+        $user->delete();
+        return response()->json(
+            [
+            "success" => true,
+            "message" => "User berhasil dihapus",
+            ]
+        );
     }
     public function show($id)
-{
-    $user = User::find($id);
+    {
+        $user = User::find($id);
 
-    if (!$user) {
+        if (!$user) {
+            return response()->json(
+                [
+                    "success" => false,
+                    "message" => "Data tidak ditemukan",
+                ],
+                404
+            );
+        }
+
         return response()->json([
-            'success' => false,
-            'message' => 'Data tidak ditemukan'
-        ], 404);
+            "success" => true,
+            "message" => "Detail user berhasil diambil",
+            "data" => [
+                "id" => $user->id,
+                "name" => $user->name,
+                "email" => $user->email,
+                "role" => $user->role,
+            ],
+        ]);
     }
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Detail user berhasil diambil',
-        'data' => [
-            'id'    => $user->id,
-            'name'  => $user->name,
-            'email' => $user->email,
-            'role'  => $user->role,
-        ],
-    ]);
 }
-    public function me(Request $request){
-            return response()->json($request->user());
-    }
-    }
-
