@@ -11,6 +11,7 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
+Route::post('auth/check-email', [AuthController::class, 'checkEmail']);
 
 // Publik
 Route::get('/products', [ProductController::class, 'index']);
@@ -24,6 +25,7 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::get('/users', [AuthController::class, 'index']);
     Route::delete('/users/{id}', [AuthController::class, 'destroy']);
     Route::get('/users/{id}', [AuthController::class, 'show']);
+    Route::put('/user/{id}/role', [AuthController::class, 'updateRole']);
     Route::post('/products', [ProductController::class, 'store']);
     Route::put('/products/{product}', [ProductController::class, 'update']);
     Route::delete('/products/{product}', [ProductController::class, 'destroy']);

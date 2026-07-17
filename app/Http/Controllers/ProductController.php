@@ -37,12 +37,20 @@ class ProductController extends Controller
     $order = $request->order === 'asc' ? 'asc' : 'desc';
     $query->orderBy($sortBy, $order);
 
-    $products = $query->get();
+    // Pagination
+    $perPage = $request->query('per_page', 12);
+    $products = $query->paginate($perPage);
 
     return response()->json([
         'success' => true,
         'message' => 'Data produk berhasil diambil',
-        'data' => $products->map(fn($product) => $this->formatProduct($product)),
+        'data' => collect($products->items())->map(fn($product) => $this->formatProduct($product)),
+        'meta' => [
+            'current_page' => $products->currentPage(),
+            'last_page' => $products->lastPage(),
+            'per_page' => $products->perPage(),
+            'total' => $products->total(),
+        ],
     ]);
     }
 

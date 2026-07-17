@@ -121,4 +121,61 @@ class AuthController extends Controller
             ],
         ]);
     }
+
+    // PUT /api/users/{id}/role
+    // Cuma admin yang boleh mengubah role user lain (termasuk menjadikan admin baru)
+    public function updateRole(Request $request, $id)
+    {
+        if ($request->user()->role !== "admin") {
+            return response()->json(
+                [
+                    "success" => false,
+                    "message" => "Anda tidak memiliki akses untuk mengubah role",
+                ],
+                403
+            );
+        }
+
+        $validated = $request->validate([
+            "role" => "required|in:buyer,seller,admin",
+        ]);
+
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(
+                [
+                    "success" => false,
+                    "message" => "Data tidak ditemukan",
+                ],
+                404
+            );
+        }
+
+        $user->role = $validated["role"];
+        $user->save();
+
+        return response()->json([
+            "success" => true,
+            "message" => "Role berhasil diperbarui",
+            "data" => [
+                "id" => $user->id,
+                "name" => $user->name,
+                "email" => $user->email,
+                "role" => $user->role,
+            ],
+        ]);
+    }
+
+    public function checkEmail(Request $request)
+    {
+        $validated = $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $exists = User::where('email', $validated['email'])->exists();
+
+        return response()->json([
+            'exists' => $exists,
+        ]);
+    }
 }
