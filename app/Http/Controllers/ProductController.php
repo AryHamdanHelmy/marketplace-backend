@@ -100,13 +100,13 @@ class ProductController extends Controller
 
         // Upload thumbnail kalau ada
         if ($request->hasFile('thumbnail')) {
-            $uploadedFile = cloudinary()->upload($request->file('image')->getRealPath(), [
+            $uploadedFile = cloudinary()->upload($request->file('thumbnail')->getRealPath(), [
                 'folder' => 'products',
                 ])->getSecurePath();
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $path,
+                'image_path' => $uploadedFile,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -155,14 +155,16 @@ class ProductController extends Controller
 
         // Update thumbnail kalau ada file baru
         if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store('products', 'public');
+            $uploadedFile = cloudinary()->upload($request->file('thumbnail')->getRealPath(), [
+            'folder' => 'products',
+            ])->getSecurePath();
 
             // Hapus primary image lama, ganti yang baru
             $product->images()->where('is_primary', true)->delete();
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $path,
+                'image_path' => $uploadedFile,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -222,9 +224,7 @@ class ProductController extends Controller
             'stock'          => $product->stock,
             'rating'         => $product->rating,
             'rating_label'   => $this->getRatingLabel((float) $product->rating),
-            'thumbnail'      => $imagePath
-                                    ? asset('storage/' . $imagePath)
-                                    : null,
+            'thumbnail'      => $imagePath ?: null,
             'file_path'      => $product->file_path,
             'download_count' => $product->download_count,
             'status'         => $product->status,
