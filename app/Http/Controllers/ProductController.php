@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\Request;
-
+use Claudinary\Claudinary;
 class ProductController extends Controller
 {
     // GET /api/products
@@ -100,7 +100,9 @@ class ProductController extends Controller
 
         // Upload thumbnail kalau ada
         if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store('products', 'public');
+            $uploadedFile = cloudinary()->upload($request->file('image')->getRealPath(), [
+                'folder' => 'products',
+                ])->getSecurePath();
 
             ProductImage::create([
                 'product_id' => $product->id,
