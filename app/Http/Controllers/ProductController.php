@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\Request;
-use Claudinary\Claudinary;
+use Illuminate\Support\Facades\Storage;
+
 class ProductController extends Controller
 {
     // GET /api/products
@@ -100,13 +101,11 @@ class ProductController extends Controller
 
         // Upload thumbnail kalau ada
         if ($request->hasFile('thumbnail')) {
-            $uploadedFile = cloudinary()->upload($request->file('thumbnail')->getRealPath(), [
-                'folder' => 'products',
-                ])->getSecurePath();
+            $path = $request->file('thumbnail')->store('products', 'public');
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $uploadedFile,
+                'image_path' => $path,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -155,16 +154,14 @@ class ProductController extends Controller
 
         // Update thumbnail kalau ada file baru
         if ($request->hasFile('thumbnail')) {
-            $uploadedFile = cloudinary()->upload($request->file('thumbnail')->getRealPath(), [
-            'folder' => 'products',
-            ])->getSecurePath();
-
+            $path = $request->file('thumbnail')->store('products', 'cloudinary');
+            $uploadedFileUrl = storage::disk('cloudinary')->url($path);
             // Hapus primary image lama, ganti yang baru
             $product->images()->where('is_primary', true)->delete();
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $uploadedFile,
+                'image_path' => $uploadedFileUrl,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -224,7 +221,9 @@ class ProductController extends Controller
             'stock'          => $product->stock,
             'rating'         => $product->rating,
             'rating_label'   => $this->getRatingLabel((float) $product->rating),
-            'thumbnail'      => $imagePath ?: null,
+            'thumbnail'      => $imagePath
+                                    ? asset('storage/' . $imagePath)
+                                    : null,
             'file_path'      => $product->file_path,
             'download_count' => $product->download_count,
             'status'         => $product->status,

@@ -59,6 +59,9 @@ return [
             'throw' => false,
             'report' => false,
         ],
+        'cloudinary' => [
+            'driver' => 'cloudinary',
+        ],
 
     ],
 
