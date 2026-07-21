@@ -21,9 +21,8 @@ class CartController extends Controller
                 'id' => $item->product->id,
                 'title' => $item->product->name,
                 'price' => $item->product->price,
-                'thumbnail' => $item->product->primaryImage?->image_path
-                    ? asset('storage/' . $item->product->primaryImage->image_path)
-                    : null,
+                // image_path sekarang selalu berisi URL lengkap dari Cloudinary
+                'thumbnail' => $item->product->primaryImage?->image_path,
                 'seller' => $item->product->seller?->name,
             ],
             'subtotal' => $item->quantity * $item->product->price,

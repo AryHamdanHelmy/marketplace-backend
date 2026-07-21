@@ -99,13 +99,14 @@ class ProductController extends Controller
         // Simpan produk dulu tanpa thumbnail
         $product = Product::create(collect($validated)->except('thumbnail')->toArray());
 
-        // Upload thumbnail kalau ada
+        // Upload thumbnail ke Cloudinary kalau ada
         if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store('products', 'public');
+            $path = $request->file('thumbnail')->store('products', 'cloudinary');
+            $uploadedFileUrl = Storage::disk('cloudinary')->url($path);
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $path,
+                'image_path' => $uploadedFileUrl, // URL lengkap dari Cloudinary
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -152,10 +153,11 @@ class ProductController extends Controller
 
         $product->update(collect($validated)->except('thumbnail')->toArray());
 
-        // Update thumbnail kalau ada file baru
+        // Update thumbnail ke Cloudinary kalau ada file baru
         if ($request->hasFile('thumbnail')) {
             $path = $request->file('thumbnail')->store('products', 'cloudinary');
-            $uploadedFileUrl = storage::disk('cloudinary')->url($path);
+            $uploadedFileUrl = Storage::disk('cloudinary')->url($path);
+
             // Hapus primary image lama, ganti yang baru
             $product->images()->where('is_primary', true)->delete();
 
@@ -221,9 +223,9 @@ class ProductController extends Controller
             'stock'          => $product->stock,
             'rating'         => $product->rating,
             'rating_label'   => $this->getRatingLabel((float) $product->rating),
-            'thumbnail'      => $imagePath
-                                    ? asset('storage/' . $imagePath)
-                                    : null,
+            // image_path sekarang selalu berisi URL lengkap dari Cloudinary,
+            // jadi dipakai apa adanya - tidak perlu asset('storage/...') lagi
+            'thumbnail'      => $imagePath,
             'file_path'      => $product->file_path,
             'download_count' => $product->download_count,
             'status'         => $product->status,
