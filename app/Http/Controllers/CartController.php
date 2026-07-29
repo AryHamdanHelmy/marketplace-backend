@@ -14,24 +14,32 @@ class CartController extends Controller
             ->where('user_id', $request->user()->id)
             ->get();
 
+        // Produk pakai SoftDeletes — kalau sudah dihapus, relasinya jadi null.
+        // Item cart seperti ini tidak lagi bermakna, jadi dibersihkan.
+        $orphaned = $items->filter(fn($item) => $item->product === null);
+
+        if ($orphaned->isNotEmpty()) {
+            CartItem::whereIn('id', $orphaned->pluck('id'))->delete();
+            $items = $items->filter(fn($item) => $item->product !== null);
+        }
+
         $formatted = $items->map(fn($item) => [
-            'id' => $item->id,
+            'id'       => $item->id,
             'quantity' => $item->quantity,
-            'product' => [
-                'id' => $item->product->id,
-                'title' => $item->product->name,
-                'price' => $item->product->price,
-                // image_path sekarang selalu berisi URL lengkap dari Cloudinary
+            'product'  => [
+                'id'        => $item->product->id,
+                'title'     => $item->product->name,
+                'price'     => $item->product->price,
                 'thumbnail' => $item->product->primaryImage?->image_path,
-                'seller' => $item->product->seller?->name,
+                'seller'    => $item->product->seller?->name,
             ],
             'subtotal' => $item->quantity * $item->product->price,
-        ]);
+        ])->values();
 
         return response()->json([
             'success' => true,
-            'data' => $formatted,
-            'total' => $formatted->sum('subtotal'),
+            'data'    => $formatted,
+            'total'   => $formatted->sum('subtotal'),
         ]);
     }
 

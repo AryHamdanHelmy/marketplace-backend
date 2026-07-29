@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\ProductImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,7 +20,24 @@ class ProductController extends Controller
         }
 
         if ($request->has('category_id')) {
-            $query->where('category_id', $request->category_id);
+            $categoryId = $request->category_id;
+
+            // Kalau yang dipilih kategori induk, sertakan semua sub-kategorinya
+            $childIds = ProductCategory::where('parent_id', $categoryId)->pluck('id');
+
+            if ($childIds->isNotEmpty()) {
+                $query->whereIn('category_id', $childIds);
+            } else {
+                $query->where('category_id', $categoryId);
+            }
+        }
+        
+        if ($request->status === 'all') {
+            // sengaja tidak difilter
+        } elseif ($request->has('status')) {
+            $query->where('status', $request->status);
+        } else {
+            $query->where('status', 'active');
         }
 
         if ($request->has('min_price')) {
@@ -93,6 +111,18 @@ class ProductController extends Controller
                 'errors'  => $e->errors(),
             ], 422);
         }
+        if (!empty($validated['category_id'])) {
+            $isParent = ProductCategory::where('id', $validated['category_id'])
+                ->whereNull('parent_id')
+                ->exists();
+
+            if ($isParent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih sub-kategori, bukan kategori utama',
+                ], 422);
+            }
+        }
 
         $validated['seller_id'] = auth()->id();
 
@@ -131,7 +161,7 @@ class ProductController extends Controller
             ], 404);
         }
 
-        if ($product->seller_id !== auth()->id()) {
+        if ($product->seller_id !== auth()->id() && auth()->user()->role !== 'admin' ) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki akses untuk mengubah data ini',
@@ -150,6 +180,19 @@ class ProductController extends Controller
             'download_count' => 'nullable|integer|min:0',
             'thumbnail'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+        
+        if (!empty($validated['category_id'])) {
+            $isParent = ProductCategory::where('id', $validated['category_id'])
+                ->whereNull('parent_id')
+                ->exists();
+
+            if ($isParent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih sub-kategori, bukan kategori utama',
+                ], 422);
+            }
+        }
 
         $product->update(collect($validated)->except('thumbnail')->toArray());
 
@@ -188,7 +231,7 @@ class ProductController extends Controller
             ], 404);
         }
 
-        if ($product->seller_id !== auth()->id()) {
+        if ($product->seller_id !== auth()->id() && auth()->user()->role !== 'admin') {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki akses untuk menghapus data ini',

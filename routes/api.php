@@ -4,6 +4,9 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\ProductImportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -34,8 +37,23 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('/cart', [CartController::class, 'store']);
     Route::put('/cart/{id}', [CartController::class, 'update']);
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
+    Route::post('/checkout', [CheckoutController::class, 'store']);
+    Route::get('/checkout/{groupId}', [CheckoutController::class, 'showGroup']);
+    // Buyer
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
+    Route::post('/orders/{id}/pay', [OrderController::class, 'pay']);
+    Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+
+    // Seller
+    Route::get('/seller/orders', [OrderController::class, 'sellerOrders']);
+    Route::put('/seller/orders/{id}/status', [OrderController::class, 'updateStatus']);
     Route::post('/categories', [ProductCategoryController::class, 'store']);
     Route::put('/categories/{categories}', [ProductCategoryController::class, 'update']);
     Route::delete('/categories/{categories}', [ProductCategoryController::class, 'destroy']);
+    Route::get('/product-import/template', [ProductImportController::class, 'downloadTemplate']);
+    Route::post('/product-import/preview',  [ProductImportController::class, 'preview']);
+    Route::post('/product-import',          [ProductImportController::class, 'store']);
+    Route::get('/product-import/history',   [ProductImportController::class, 'history']);
 });
 
