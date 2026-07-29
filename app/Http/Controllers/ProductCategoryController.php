@@ -81,6 +81,8 @@ class ProductCategoryController extends Controller
             'description' => 'nullable|string',
             'icon'        => 'nullable|string',
             'image_url'   => 'nullable|string|max:500',
+            'parent_id'   => 'nullable|exists:product_categories,id',
+            'sort_order'  => 'nullable|integer|min:0',
         ]);
 
         $category = ProductCategory::create($validated);
@@ -109,6 +111,8 @@ class ProductCategoryController extends Controller
             'description' => 'nullable|string',
             'icon'        => 'nullable|string',
             'image_url'   => 'nullable|string|max:500',
+            'parent_id'   => 'nullable|exists:product_categories,id',
+            'sort_order'  => 'nullable|integer|min:0',
         ]);
 
         $category->update($validated);
@@ -122,7 +126,6 @@ class ProductCategoryController extends Controller
 
     public function destroy($id)
     {
-        // Admin only
         if (auth()->user()->role !== 'admin') {
             return response()->json([
                 'success' => false,
@@ -131,6 +134,28 @@ class ProductCategoryController extends Controller
         }
 
         $category = ProductCategory::findOrFail($id);
+
+        // Jangan hapus kalau masih ada sub-kategori
+        if ($category->children()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hapus sub-kategorinya terlebih dahulu',
+            ], 422);
+        }
+
+        // Hitung termasuk produk yang soft-deleted, karena foreign key
+        // di database juga menghitungnya
+        $productCount = \App\Models\Product::withTrashed()
+            ->where('category_id', $id)
+            ->count();
+
+        if ($productCount > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Masih ada {$productCount} produk di kategori ini",
+            ], 422);
+        }
+
         $category->delete();
 
         return response()->json([

@@ -11,6 +11,7 @@ class ProductCategory extends Model
         'name',
         'description',
         'icon',
+        'image_url',
         'sort_order',
     ];
 
