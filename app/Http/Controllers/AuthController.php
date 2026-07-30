@@ -10,6 +10,7 @@ class AuthController extends Controller
 {
     public function index(Request $request)
     {
+        if($deny = $this->denyIfNotAdmin()) return $deny;
         $perPage = $request->query("per_page", 10);
         $users = User::select("id", "name", "email", "role")
             ->paginate($perPage);
@@ -61,7 +62,7 @@ class AuthController extends Controller
         ]);
         $user = User::where("email", $validated["email"])->first();
         if (!$user || !Hash::check($validated["password"], $user->password)) {
-            return response()->json(["message" => "invlid credentials"], 401);
+            return response()->json(["message" => "invalid credentials"], 401);
         }
         $token = $user->createToken("auth_token")->plainTextToken;
         return response()->json([
@@ -79,6 +80,13 @@ class AuthController extends Controller
     }
     public function destroy($id)
     {
+        if ($deny = $this->denyIfNotAdmin()) return $deny;
+        if ((int) $id === auth()->id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'tidak bisa menghapus akun sendiri',
+            ], 422);
+        }
         $user = User::find($id);
         if (!$user){
             return response()->json(
@@ -98,6 +106,7 @@ class AuthController extends Controller
     }
     public function show($id)
     {
+        if ($deny = $this->denyIfNotAdmin()) return $deny;
         $user = User::find($id);
 
         if (!$user) {
@@ -177,5 +186,16 @@ class AuthController extends Controller
         return response()->json([
             'exists' => $exists,
         ]);
+    }
+    private function denyIfNotAdmin()
+    {
+        if (auth()->user()?->role !== 'admin'){
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki akses'
+            ], 403);
+        }
+
+        return null;
     }
 }

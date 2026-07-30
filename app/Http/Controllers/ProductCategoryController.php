@@ -9,6 +9,33 @@ class ProductCategoryController extends Controller
 {
     public function index(Request $request)
     {
+        if ($request->boolean('popular')) {
+            $limit = (int) $request->query('limit', 10);
+
+            $categories = ProductCategory::withCount(['products' => function ($q) {
+                    $q->where('status', 'active');
+                }])
+                ->with('parent:id,name')
+                ->get()
+                ->sortByDesc(fn($c) => $c->products_count)
+                ->take($limit)
+                ->map(fn($c) => [
+                    'id'            => $c->id,
+                    'name'          => $c->name,
+                    'icon'          => $c->icon,
+                    'image_url'     => $c->image_url,
+                    'parent_name'   => $c->parent?->name,
+                    'is_parent'     => $c->parent_id === null,
+                    'product_count' => $c->products_count,
+                ])
+                ->values();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Data kategori berhasil diambil',
+                'data'    => $categories,
+            ]);
+        }
         // ?flat=1 → daftar datar sub-kategori saja, untuk dropdown form
         if ($request->boolean('flat')) {
             $categories = ProductCategory::whereNotNull('parent_id')
@@ -58,7 +85,13 @@ class ProductCategoryController extends Controller
 
     public function show($id)
     {
-        $category = ProductCategory::findOrFail($id);
+        $category = ProductCategory::find($id);
+        if (!category){
+            return response()->json([
+                'success' => false,
+                'message' => 'Data tidak ditemukan',
+            ], 404);
+        }
         return response()->json([
             'success' => true,
             'message' => 'Data kategori berhasil diambil',

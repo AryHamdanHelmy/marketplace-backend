@@ -119,6 +119,12 @@ class ProductImportController extends Controller
     // POST /api/product-import/preview
     public function preview(Request $request)
     {
+        if (!in_array(auth()->user()->role, ['seller','admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya seller yang dapat mengimport product',
+            ], 403);
+        }
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:3072',
         ]);
@@ -149,6 +155,12 @@ class ProductImportController extends Controller
     // POST /api/product-import
     public function store(Request $request)
     {
+        if (!in_array(auth()->user()->role, ['seller','admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya seller yang dapat mengimport product',
+            ], 403);
+        }
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls|max:3072',
         ]);

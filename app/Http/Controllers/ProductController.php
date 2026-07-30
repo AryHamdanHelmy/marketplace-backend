@@ -31,7 +31,7 @@ class ProductController extends Controller
                 $query->where('category_id', $categoryId);
             }
         }
-        
+
         if ($request->status === 'all') {
             // sengaja tidak difilter
         } elseif ($request->has('status')) {
@@ -110,6 +110,12 @@ class ProductController extends Controller
                 'message' => 'Validasi gagal',
                 'errors'  => $e->errors(),
             ], 422);
+        }
+        if (!in_array(auth()->user()->role, ['seller','admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya seller yang dapat menambahkan product',
+            ], 403);
         }
         if (!empty($validated['category_id'])) {
             $isParent = ProductCategory::where('id', $validated['category_id'])

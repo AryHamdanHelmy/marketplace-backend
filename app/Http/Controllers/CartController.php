@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\CartItem;
 use Illuminate\Http\Request;
+use App\Models\Product;
+
 
 class CartController extends Controller
 {
@@ -50,20 +52,35 @@ class CartController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'nullable|integer|min:1',
         ]);
+        $product = Product::find($validated['product_id']);
 
+        if (!$product || $product->status !== 'active') {
+            return response()->json([
+                'success' =>false,
+                'message' => 'Product tidak tersedia',
+            ], 422);
+        }
         $item = CartItem::where('user_id', $request->user()->id)
             ->where('product_id', $validated['product_id'])
             ->first();
+        $addQty = $validated['quantity'] ?? 1;
+        $finalQty = $item ? $item->quantity + $addQty : $addQty;
+        
+        if ($finalQty > $product->stock) {
+            return response()->json([
+                'success' => false,
+                'message' => "Stock tidak mencukupi, tersisa {$product->stock}",
+            ], 422);
+        }
 
         if ($item) {
-            // Udah ada di cart -> tambah quantity
-            $item->quantity += $validated['quantity'] ?? 1;
+            $item->quantity = $finalQty;
             $item->save();
         } else {
             $item = CartItem::create([
                 'user_id' => $request->user()->id,
                 'product_id' => $validated['product_id'],
-                'quantity' => $validated['quantity'] ?? 1,
+                'quantity' => $addQty,
             ]);
         }
 
@@ -77,7 +94,9 @@ class CartController extends Controller
     // PUT /api/cart/{id}  { quantity }
     public function update(Request $request, $id)
     {
-        $item = CartItem::where('user_id', $request->user()->id)->find($id);
+        $item = CartItem::with('product')
+            ->where('user_id', $request->user()->id)
+            ->find($id);
 
         if (!$item) {
             return response()->json(['success' => false, 'message' => 'Item not found'], 404);
@@ -86,6 +105,20 @@ class CartController extends Controller
         $validated = $request->validate([
             'quantity' => 'required|integer|min:1',
         ]);
+
+        if (!$item->product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Produk sudah tidak tersedia',
+            ], 422);
+        }
+
+        if ($validated['quantity'] > $item->product->stock) {
+            return response()->json([
+                'success' => false,
+                'message' => "Stok tidak mencukupi, tersisa {$item->product->stock}",
+            ], 422);
+        }
 
         $item->quantity = $validated['quantity'];
         $item->save();
