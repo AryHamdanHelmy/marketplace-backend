@@ -22,6 +22,14 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
 Route::get('/categories', [ProductCategoryController::class, 'index']);
 Route::get('/categories/{categories}', [ProductCategoryController::class, 'show']);
+Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
+    return response()->json([
+        'ip'              => $request->ip(),
+        'ips'             => $request->ips(),
+        'x_forwarded_for' => $request->header('X-Forwarded-For'),
+        'remote_addr'     => $request->server('REMOTE_ADDR'),
+    ]);
+});
 
 // Protected
 Route::middleware('auth:sanctum')->group(function(){
