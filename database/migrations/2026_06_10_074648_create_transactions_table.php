@@ -6,32 +6,27 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
-        Schema::table('transactions', function (Blueprint $table) {
-            $table->uuid('checkout_group_id')->nullable()->after('id')->index();
-            $table->string('invoice_number', 50)->nullable()->unique()->after('checkout_group_id');
-            $table->string('seller_name', 150)->nullable()->after('seller_id');
-            $table->timestamp('paid_at')->nullable()->after('total_amount');
-            $table->timestamp('cancelled_at')->nullable()->after('paid_at');
-
-            $table->index(['buyer_id', 'status']);
-            $table->index(['seller_id', 'status']);
+        Schema::create('transactions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('buyer_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('seller_id')->constrained('users')->restrictOnDelete();
+            $table->enum('status', ['pending', 'paid', 'shipped', 'completed', 'cancelled'])->default('pending');
+            $table->decimal('total_amount', 12, 2);
+            $table->timestamps();
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::table('transactions', function (Blueprint $table) {
-            $table->dropIndex(['buyer_id', 'status']);
-            $table->dropIndex(['seller_id', 'status']);
-            $table->dropColumn([
-                'checkout_group_id',
-                'invoice_number',
-                'seller_name',
-                'paid_at',
-                'cancelled_at',
-            ]);
-        });
+        Schema::dropIfExists('balance_logs');
+        Schema::dropIfExists('transactions');
     }
 };

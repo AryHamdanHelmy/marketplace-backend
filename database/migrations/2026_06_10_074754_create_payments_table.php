@@ -6,21 +6,28 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
-        Schema::create('checkout_attempts', function (Blueprint $table) {
+        Schema::create('payments', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('idempotency_key', 100);
-            $table->uuid('checkout_group_id')->nullable();
+            $table->foreignId('transaction_id')->unique()->constrained('transactions')->cascadeOnDelete();
+            $table->enum('method', ['bank_transfer', 'ewallet', 'cod'])->default('bank_transfer');
+            $table->enum('status', ['pending', 'verified', 'failed'])->default('pending');
+            $table->decimal('amount', 12, 2);
+            $table->string('proof_image')->nullable(); // path bukti transfer
+            $table->timestamp('paid_at')->nullable();
             $table->timestamps();
-
-            $table->unique(['user_id', 'idempotency_key']);
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
-        Schema::dropIfExists('checkout_attempts');
+        Schema::dropIfExists('payments');
     }
 };
