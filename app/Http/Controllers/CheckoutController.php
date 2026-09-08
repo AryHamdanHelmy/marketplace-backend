@@ -21,6 +21,8 @@ class CheckoutController extends Controller
             'idempotency_key' => 'required|string|max:100',
             'payment_method'  => 'required|in:bank_transfer,ewallet,cod',
             'notes'           => 'nullable|string|max:500',
+            'cart_item_ids'   => 'nullable|array|min:1',
+            'cart_item_ids.*' => 'integer',
         ]);
 
         $userId = $request->user()->id;
@@ -48,18 +50,26 @@ class CheckoutController extends Controller
                 ]);
 
                 // --- Ambil isi cart ---
-                $cartItems = CartItem::with('product.seller', 'product.primaryImage')
-                    ->where('user_id', $userId)
-                    ->get();
+                $selectedIds = $validated['cart_item_ids'] ?? null;
 
-                if ($cartItems->isEmpty()) {
-                    abort(422, 'Your cart is empty');
+                $cartQuery = CartItem::with('product.seller', 'product.primaryImage')
+                    ->where('user_id', $userId);      // pagar kepemilikan
+
+                if ($selectedIds) {
+                    $cartQuery->whereIn('id', $selectedIds);
                 }
 
-                $cartItems = $cartItems->filter(fn($item) => $item->product !== null);
+                $cartItems = $cartQuery->get();
 
                 if ($cartItems->isEmpty()) {
-                    abort(422, 'All items in your cart are no longer available');
+                    abort(422, 'No items selected for checkout');
+                }
+
+                // ID milik user lain / sudah terhapus akan hilang diam-diam di query di atas.
+                // Lebih baik gagal terang-terangan daripada user membayar lebih sedikit
+                // dari yang dia kira dia beli.
+                if ($selectedIds && $cartItems->count() !== count(array_unique($selectedIds))) {
+                    abort(422, 'Some selected items are no longer in your cart');
                 }
 
                 // --- Kunci produk berurutan by ID ---
@@ -169,7 +179,7 @@ class CheckoutController extends Controller
                 }
 
                 // --- Kosongkan cart ---
-                CartItem::where('user_id', $userId)->delete();
+                CartItem::where('id', $cartItems->pluck('id'))->delete();
 
                 // Simpan group id ke attempt supaya retry mengembalikan hasil yang sama
                 $attempt->update(['checkout_group_id' => $checkoutGroupId]);
