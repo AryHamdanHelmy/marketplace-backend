@@ -179,7 +179,7 @@ class CheckoutController extends Controller
                 }
 
                 // --- Kosongkan cart ---
-                CartItem::where('id', $cartItems->pluck('id'))->delete();
+                CartItem::whereIn('id', $cartItems->pluck('id'))->delete();
 
                 // Simpan group id ke attempt supaya retry mengembalikan hasil yang sama
                 $attempt->update(['checkout_group_id' => $checkoutGroupId]);

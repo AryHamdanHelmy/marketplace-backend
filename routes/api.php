@@ -1,19 +1,23 @@
 <?php
 
+use App\Http\Controllers\AdminWithdrawalController;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\ProductCategoryController;
-use App\Http\Controllers\ProductController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\ProductCategoryController;
+use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\SellerStatsController;
+use App\Http\Controllers\StoreController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PasswordResetController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
 Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
 Route::post('auth/check-email', [AuthController::class, 'checkEmail'])->middleware('throttle:10,1');
@@ -25,6 +29,7 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
 Route::get('/categories', [ProductCategoryController::class, 'index']);
 Route::get('/categories/{categories}', [ProductCategoryController::class, 'show']);
+Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
     return response()->json([
         'ip'              => $request->ip(),
@@ -50,13 +55,25 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::delete('/cart/{id}', [CartController::class, 'destroy']);
     Route::post('/checkout', [CheckoutController::class, 'store']);
     Route::get('/checkout/{groupId}', [CheckoutController::class, 'showGroup']);
+    Route::get('/seller/store', [StoreController::class, 'show']);
+    Route::put('/seller/store', [StoreController::class, 'update']);
+    Route::put('/seller/store/payout', [StoreController::class, 'updatePayout']);
+    Route::patch('/seller/store/status', [StoreController::class, 'toggleStatus']);
+    Route::get('/admin/withdrawals', [AdminWithdrawalController::class, 'index']);
+    Route::get('/admin/withdrawals/{id}', [AdminWithdrawalController::class, 'show']);
+    Route::patch('/admin/withdrawals/{id}/processing', [AdminWithdrawalController::class, 'markProcessing']);
+    Route::patch('/admin/withdrawals/{id}/complete', [AdminWithdrawalController::class, 'complete']);
+    Route::patch('/admin/withdrawals/{id}/reject', [AdminWithdrawalController::class, 'reject']);
+
     // Buyer
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
     Route::post('/orders/{id}/pay', [OrderController::class, 'pay']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
+    Route::post('/orders/{id}/confirm', [OrderController::class, 'confirmReceipt']);
 
     // Seller
+    Route::get('/seller/stats', [SellerStatsController::class, 'index']);
     Route::get('/seller/orders', [OrderController::class, 'sellerOrders']);
     Route::put('/seller/orders/{id}/status', [OrderController::class, 'updateStatus']);
     Route::post('/categories', [ProductCategoryController::class, 'store']);
@@ -67,4 +84,3 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('/product-import',          [ProductImportController::class, 'store']);
     Route::get('/product-import/history',   [ProductImportController::class, 'history']);
 });
-

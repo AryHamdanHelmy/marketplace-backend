@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Transaction;
+use App\Services\BalanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -156,6 +157,47 @@ class OrderController extends Controller
         ]);
     }
 
+    // POST /api/orders/{id}/confirm
+    //
+    // The buyer confirming receipt is what releases the money. The seller's
+    // balance is credited inside the same transaction, so the order can never
+    // read as completed while the ledger says otherwise.
+    public function confirmReceipt(Request $request, $id)
+    {
+        $userId = $request->user()->id;
+
+        $order = DB::transaction(function () use ($id, $userId) {
+
+            $order = Transaction::where('buyer_id', $userId)
+                ->lockForUpdate()
+                ->find($id);
+
+            if (!$order) {
+                abort(404, 'Order not found');
+            }
+
+            if ($order->status !== 'shipped') {
+                abort(422, "Only shipped orders can be confirmed, current status: {$order->status}");
+            }
+
+            $order->update([
+                'status'       => 'completed',
+                'completed_at' => now(),
+                'completed_by' => 'buyer',
+            ]);
+
+            app(BalanceService::class)->creditForCompletedOrder($order);
+
+            return $order;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Thanks for confirming. The seller has been paid.',
+            'data'    => $this->formatOrder($order->fresh(['items', 'payment']), true),
+        ]);
+    }
+
     // ==================== SELLER ====================
 
     // GET /api/seller/orders
@@ -191,10 +233,15 @@ class OrderController extends Controller
     }
 
     // PUT /api/seller/orders/{id}/status
+    //
+    // Sellers can move an order forward only as far as "shipped". Completion
+    // belongs to the buyer, or to the scheduled job once the confirmation
+    // window expires — otherwise a seller could mark their own orders
+    // complete and draw the money before anything was delivered.
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:shipped,completed',
+            'status' => 'required|in:shipped',
         ]);
 
         $userId = $request->user()->id;
@@ -211,8 +258,7 @@ class OrderController extends Controller
 
             // Transisi status yang diizinkan — mencegah lompat status sembarangan
             $allowed = [
-                'paid'    => ['shipped'],
-                'shipped' => ['completed'],
+                'paid' => ['shipped'],
             ];
 
             $canMoveTo = $allowed[$order->status] ?? [];
@@ -221,14 +267,17 @@ class OrderController extends Controller
                 abort(422, "Cannot change status from {$order->status} to {$validated['status']}");
             }
 
-            $order->update(['status' => $validated['status']]);
+            $order->update([
+                'status'     => 'shipped',
+                'shipped_at' => now(),
+            ]);
 
             return $order;
         });
 
         return response()->json([
             'success' => true,
-            'message' => 'Order status updated successfully',
+            'message' => 'Order marked as shipped',
             'data'    => $this->formatOrder($order->fresh(['items', 'payment']), true),
         ]);
     }
@@ -245,6 +294,8 @@ class OrderController extends Controller
             'status'         => $trx->status,
             'total_amount'   => $trx->total_amount,
             'paid_at'        => $trx->paid_at,
+            'shipped_at'     => $trx->shipped_at,
+            'completed_at'   => $trx->completed_at,
             'cancelled_at'   => $trx->cancelled_at,
             'created_at'     => $trx->created_at,
             'is_cancellable' => $trx->isCancellable(),

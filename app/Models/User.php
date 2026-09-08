@@ -47,4 +47,14 @@ class User extends Authenticatable
             'deleted_at' => 'datetime',
         ];
     }
+
+    public function store()
+    {
+        return $this->hasOne(Store::class, 'seller_id');
+    }
+
+    public function products()
+    {
+        return $this->hasMany(Product::class, 'seller_id');
+    }
 }
