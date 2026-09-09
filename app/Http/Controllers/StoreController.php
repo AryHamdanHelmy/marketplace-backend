@@ -10,6 +10,26 @@ use Throwable;
 
 class StoreController extends Controller
 {
+    // GET /api/shops
+    public function publicIndex(Request $request)
+    {
+        $shops = Store::where('is_open', true)
+            ->orderByDesc('created_at')
+            ->paginate($request->query('per_page', 12));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Shops retrieved',
+            'data' => collect($shops->items())->map(fn ($shop) => [
+                'name'        => $shop->name,
+                'slug'        => $shop->slug,
+                'description' => $shop->description,
+                'logo_url'    => $shop->logo_url,
+                'city'        => $shop->city,
+                'province'    => $shop->province,
+            ]),
+        ]);
+    }
     // GET /api/seller/store
     //
     // Sellers who registered before shops existed have no row yet, so one is

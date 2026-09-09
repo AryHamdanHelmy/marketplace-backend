@@ -30,6 +30,8 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{product}', [ProductController::class, 'show']);
 Route::get('/categories', [ProductCategoryController::class, 'index']);
 Route::get('/categories/{categories}', [ProductCategoryController::class, 'show']);
+Route::get('/shops', [StoreController::class, 'publicIndex']);
+Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
     return response()->json([

@@ -13,7 +13,7 @@ class ProductController extends Controller
     // GET /api/products
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'seller', 'primaryImage']);
+        $query = Product::with(['category', 'seller.store', 'primaryImage']);
 
         if ($request->has('search')) {
             $query->where('name', 'like', '%' . $request->search . '%');
@@ -72,7 +72,7 @@ class ProductController extends Controller
     // GET /api/products/{id}
     public function show($id)
     {
-        $product = Product::with(['category', 'seller', 'primaryImage'])->find($id);
+        $product = Product::with(['category', 'seller.store', 'primaryImage'])->find($id);
 
         if (!$product) {
             return response()->json([
@@ -285,6 +285,13 @@ class ProductController extends Controller
             'seller'         => $product->seller ? [
                 'id'   => $product->seller->id,
                 'name' => $product->seller->name,
+                'store' => $product->seller->store ? [
+                    'name'   => $product->seller->store->name,
+                    'slug' => $product->seller->store->slug,
+                    'city' => $product->seller->store->city,
+                    'province' => $product->seller->store->province,
+                    'is_open' => $product->seller->store->is_open,
+                ] : null,
             ] : null,
         ];
     }
