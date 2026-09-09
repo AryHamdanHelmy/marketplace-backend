@@ -9,6 +9,7 @@ use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\SellerBalanceController;
 use App\Http\Controllers\SellerStatsController;
 use App\Http\Controllers\StoreController;
 use Illuminate\Http\Request;
@@ -83,4 +84,14 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('/product-import/preview',  [ProductImportController::class, 'preview']);
     Route::post('/product-import',          [ProductImportController::class, 'store']);
     Route::get('/product-import/history',   [ProductImportController::class, 'history']);
+
+    Route::get('/seller/balance', [SellerBalanceController::class, 'show']);
+    Route::get('/seller/balance/history', [SellerBalanceController::class, 'history']);
+    Route::get('/seller/withdrawals', [SellerBalanceController::class, 'index']);
+    Route::post('/seller/withdrawals', [SellerBalanceController::class, 'store'])->middleware('throttle:5,1');
+
+    Route::get('/seller/store', [StoreController::class, 'show']);
+    Route::put('/seller/store', [StoreController::class, 'update']);
+    Route::put('/seller/store/payout', [StoreController::class, 'updatePayout']);
+    Route::patch('/seller/store/status', [StoreController::class, 'toggleStatus']);
 });
