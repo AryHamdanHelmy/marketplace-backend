@@ -15,6 +15,8 @@ class SellerStatsController extends Controller
 
     private const LOW_STOCK_THRESHOLD = 5;
 
+    private const ON_TIME_HOURS = 48;
+
     // GET /api/seller/stats?range=30
     public function index(Request $request)
     {
@@ -111,7 +113,7 @@ class SellerStatsController extends Controller
     {
         $orders = Transaction::where('seller_id', $sellerId)
             ->whereNotIn('status', ['pending'])
-            ->get(['status', 'paid_at', 'updated_at']);
+            ->get(['status', 'paid_at', 'shipped_at']);
 
         $totalOrders = $orders->count();
 
@@ -120,15 +122,19 @@ class SellerStatsController extends Controller
             ? $orders->where('status', '!=', 'cancelled')->count() / $totalOrders
             : null;
 
-        // Share of paid orders that moved past "paid" within 48 hours
-        $paidOrders = $orders->whereIn('status', ['shipped', 'completed'])
-            ->filter(fn ($o) => $o->paid_at !== null);
+        // Share of orders shipped within the target window. Measured from
+        // shipped_at, which records the moment the seller handed the parcel
+        // over. Orders predating that column are excluded rather than counted
+        // as late, so old data can't unfairly sink the score.
+        $shippedOrders = $orders
+            ->whereIn('status', ['shipped', 'completed'])
+            ->filter(fn ($order) => $order->paid_at !== null && $order->shipped_at !== null);
 
-        $onTime = $paidOrders->count() > 0
-            ? $paidOrders->filter(function ($order) {
+        $onTime = $shippedOrders->count() > 0
+            ? $shippedOrders->filter(function ($order) {
                 return Carbon::parse($order->paid_at)
-                    ->diffInHours(Carbon::parse($order->updated_at)) <= 48;
-            })->count() / $paidOrders->count()
+                    ->diffInHours(Carbon::parse($order->shipped_at)) <= self::ON_TIME_HOURS;
+            })->count() / $shippedOrders->count()
             : null;
 
         $rating = $this->ratingSummary($sellerId);
@@ -206,25 +212,20 @@ class SellerStatsController extends Controller
 
     private function alerts(int $sellerId): array
     {
-        $lowStock = Product::where('seller_id', $sellerId)
+        $lowStockQuery = Product::where('seller_id', $sellerId)
             ->where('status', 'active')
-            ->where('stock', '<=', self::LOW_STOCK_THRESHOLD)
-            ->orderBy('stock')
-            ->limit(5)
-            ->get(['id', 'name', 'stock']);
-
-        $awaitingProcessing = Transaction::where('seller_id', $sellerId)
-            ->where('status', 'paid')
-            ->count();
+            ->where('stock', '<=', self::LOW_STOCK_THRESHOLD);
 
         return [
             'low_stock_threshold' => self::LOW_STOCK_THRESHOLD,
-            'low_stock_count' => Product::where('seller_id', $sellerId)
-                ->where('status', 'active')
-                ->where('stock', '<=', self::LOW_STOCK_THRESHOLD)
+            'low_stock_count' => (clone $lowStockQuery)->count(),
+            'low_stock_products' => (clone $lowStockQuery)
+                ->orderBy('stock')
+                ->limit(5)
+                ->get(['id', 'name', 'stock']),
+            'awaiting_processing' => Transaction::where('seller_id', $sellerId)
+                ->where('status', 'paid')
                 ->count(),
-            'low_stock_products' => $lowStock,
-            'awaiting_processing' => $awaitingProcessing,
         ];
     }
 }

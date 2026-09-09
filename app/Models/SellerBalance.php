@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\BalanceLog;
 use Illuminate\Database\Eloquent\Model;
 
 class SellerBalance extends Model
