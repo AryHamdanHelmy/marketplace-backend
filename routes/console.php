@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('order:auto-complete')->dailyAt('02:00');
+schedule::command('payments:expire')->hourly();

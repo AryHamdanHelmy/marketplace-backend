@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Transaction;
 use App\Models\TransactionItem;
+use App\Models\Address;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -19,6 +20,7 @@ class CheckoutController extends Controller
     {
         $validated = $request->validate([
             'idempotency_key' => 'required|string|max:100',
+            'address_id'      => 'required|integer',
             'payment_method'  => 'required|in:bank_transfer,ewallet,cod',
             'notes'           => 'nullable|string|max:500',
             'cart_item_ids'   => 'nullable|array|min:1',
@@ -118,6 +120,14 @@ class CheckoutController extends Controller
                 // --- Pecah cart per seller ---
                 $groupedBySeller = $cartItems->groupBy(fn($item) => $item->product->seller_id);
 
+                $address =Address::where('user_id', $userId)
+                    ->find($validated['address_id']);
+                if (!$address) {
+                    abort(422, 'Choose a shipping address first.');
+                }
+
+                $addressSnapshot = $address->toSnapshot();
+
                 $checkoutGroupId = (string) Str::uuid();
 
                 foreach ($groupedBySeller as $sellerId => $items) {
@@ -132,6 +142,7 @@ class CheckoutController extends Controller
 
                     $transaction = Transaction::create([
                         'checkout_group_id' => $checkoutGroupId,
+                        'shipping_address'  => $addressSnapshot,
                         'invoice_number'    => $this->generateInvoiceNumber(),
                         'buyer_id'          => $userId,
                         'seller_id'         => $sellerId,

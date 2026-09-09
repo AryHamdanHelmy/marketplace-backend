@@ -9,19 +9,26 @@ class Transaction extends Model
     protected $fillable = [
         'checkout_group_id',
         'invoice_number',
+        'shipping_address',
         'buyer_id',
         'seller_id',
         'seller_name',
         'status',
         'total_amount',
         'paid_at',
+        'shipped_at',
+        'complated_at',
+        'completed_by',
         'cancelled_at',
     ];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
+        'shipping_address' => 'array',
         'paid_at'      => 'datetime',
         'cancelled_at' => 'datetime',
+        'completed_at'     => 'datetime',
+        'cancelled_at'     => 'datetime',
     ];
 
     public function items()

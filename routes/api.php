@@ -1,14 +1,17 @@
 <?php
 
+use App\Http\Controllers\AddressController;
 use App\Http\Controllers\AdminWithdrawalController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductCategoryController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SellerBalanceController;
 use App\Http\Controllers\SellerStatsController;
 use App\Http\Controllers\StoreController;
@@ -33,6 +36,7 @@ Route::get('/categories/{categories}', [ProductCategoryController::class, 'show'
 Route::get('/shops', [StoreController::class, 'publicIndex']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
+Route::post('payment/webhook/{gateway}', [PaymentController::class, 'webhook']);
 Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
     return response()->json([
         'ip'              => $request->ip(),
@@ -74,6 +78,9 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::post('/orders/{id}/pay', [OrderController::class, 'pay']);
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/confirm', [OrderController::class, 'confirmReceipt']);
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::put('/profile', [ProfileController::class, 'update']);
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:5,1');
 
     // Seller
     Route::get('/seller/stats', [SellerStatsController::class, 'index']);
@@ -96,4 +103,15 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::put('/seller/store', [StoreController::class, 'update']);
     Route::put('/seller/store/payout', [StoreController::class, 'updatePayout']);
     Route::patch('/seller/store/status', [StoreController::class, 'toggleStatus']);
+
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::put('/addresses/{id}', [AddressController::class, 'update']);
+    Route::patch('/addresses/{id}/default', [AddressController::class, 'setDefault']);
+    Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
+
+    Route::get('/payments/channels', [PaymentController::class, 'channels']);
+    Route::get('/payments/{checkoutGroupId}', [PaymentController::class, 'show']);
+    Route::post('/payments/{checkoutGroupId}/charge', [PaymentController::class, 'charge']);
+    Route::post('/payments/{checkoutGroupId}/refresh', [PaymentController::class, 'refresh'])->middleware('throttle:10,1');
 });
