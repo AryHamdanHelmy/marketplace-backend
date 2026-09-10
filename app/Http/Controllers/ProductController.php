@@ -7,6 +7,7 @@ use App\Models\ProductCategory;
 use App\Models\ProductImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class ProductController extends Controller
 {
@@ -14,6 +15,20 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $query = Product::with(['category', 'seller.store', 'primaryImage']);
+
+        // Sellers managing their own catalogue pass mine=1. Everyone else —
+        // shoppers browsing, admins moderating — sees the whole marketplace,
+        // which is why this endpoint stays public.
+        if ($request->boolean('mine')) {
+            if (!$request->user()) {
+                abort(401, 'Sign in first.');
+            }
+            $query->where('seller_id', $request->user()->id);
+        }
+        
+        if ($request->has('seller_id')) {
+            $query->where('seller_id', $request->seller_id);
+        }
 
         if ($request->has('search')) {
             $query->where('name', 'like', '%' . $request->search . '%');
@@ -46,6 +61,10 @@ class ProductController extends Controller
 
         if ($request->has('max_price')) {
             $query->where('price', '<=', $request->max_price);
+        }
+
+        if ($request->has('min_rating')) {
+            $query->where('rating', '>=', $request->min_rating);
         }
 
         $allowedSorts = ['rating', 'price', 'download_count', 'created_at'];
@@ -91,6 +110,13 @@ class ProductController extends Controller
     // POST /api/products
     public function store(Request $request)
     {
+        if (!in_array(auth()->user()->role, ['seller', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only sellers can add products',
+            ], 403);
+        }
+
         try {
             $validated = $request->validate([
                 'category_id' => 'required|exists:product_categories,id',
@@ -107,16 +133,11 @@ class ProductController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validasi gagal',
+                'message' => 'Validation failed',
                 'errors'  => $e->errors(),
             ], 422);
         }
-        if (!in_array(auth()->user()->role, ['seller','admin'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Hanya seller yang dapat menambahkan product',
-            ], 403);
-        }
+
         if (!empty($validated['category_id'])) {
             $isParent = ProductCategory::where('id', $validated['category_id'])
                 ->whereNull('parent_id')
@@ -125,24 +146,35 @@ class ProductController extends Controller
             if ($isParent) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Pilih sub-kategori, bukan kategori utama',
+                    'message' => 'Choose a sub-category, not a top-level one',
+                ], 422);
+            }
+        }
+
+        // Uploaded before the product row exists, so a Cloudinary failure
+        // doesn't leave a half-created product behind with no image and a
+        // 500 the seller can't interpret.
+        $uploadedUrl = null;
+
+        if ($request->hasFile('thumbnail')) {
+            $uploadedUrl = $this->uploadThumbnail($request);
+
+            if ($uploadedUrl === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Image upload failed. Try again, or save without an image.',
                 ], 422);
             }
         }
 
         $validated['seller_id'] = auth()->id();
 
-        // Simpan produk dulu tanpa thumbnail
         $product = Product::create(collect($validated)->except('thumbnail')->toArray());
 
-        // Upload thumbnail ke Cloudinary kalau ada
-        if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store('products', 'cloudinary');
-            $uploadedFileUrl = Storage::disk('cloudinary')->url($path);
-
+        if ($uploadedUrl) {
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $uploadedFileUrl, // URL lengkap dari Cloudinary
+                'image_path' => $uploadedUrl,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -150,8 +182,8 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Produk berhasil ditambahkan',
-            'data'    => $this->formatProduct($product->load(['category', 'seller', 'primaryImage'])),
+            'message' => 'Product created',
+            'data'    => $this->formatProduct($product->load(['category', 'seller.store', 'primaryImage'])),
         ], 201);
     }
 
@@ -167,10 +199,10 @@ class ProductController extends Controller
             ], 404);
         }
 
-        if ($product->seller_id !== auth()->id() && auth()->user()->role !== 'admin' ) {
+        if ($product->seller_id !== auth()->id() && auth()->user()->role !== 'admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda tidak memiliki akses untuk mengubah data ini',
+                'message' => "You don't have permission to change this product",
             ], 403);
         }
 
@@ -186,7 +218,7 @@ class ProductController extends Controller
             'download_count' => 'nullable|integer|min:0',
             'thumbnail'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
-        
+
         if (!empty($validated['category_id'])) {
             $isParent = ProductCategory::where('id', $validated['category_id'])
                 ->whereNull('parent_id')
@@ -195,24 +227,34 @@ class ProductController extends Controller
             if ($isParent) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Pilih sub-kategori, bukan kategori utama',
+                    'message' => 'Choose a sub-category, not a top-level one',
+                ], 422);
+            }
+        }
+
+        // Same order as store(): upload first, so a failure leaves the
+        // existing product and its current image untouched.
+        $uploadedUrl = null;
+
+        if ($request->hasFile('thumbnail')) {
+            $uploadedUrl = $this->uploadThumbnail($request);
+
+            if ($uploadedUrl === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Image upload failed. Your other changes were not saved either.',
                 ], 422);
             }
         }
 
         $product->update(collect($validated)->except('thumbnail')->toArray());
 
-        // Update thumbnail ke Cloudinary kalau ada file baru
-        if ($request->hasFile('thumbnail')) {
-            $path = $request->file('thumbnail')->store('products', 'cloudinary');
-            $uploadedFileUrl = Storage::disk('cloudinary')->url($path);
-
-            // Hapus primary image lama, ganti yang baru
+        if ($uploadedUrl) {
             $product->images()->where('is_primary', true)->delete();
 
             ProductImage::create([
                 'product_id' => $product->id,
-                'image_path' => $uploadedFileUrl,
+                'image_path' => $uploadedUrl,
                 'is_primary' => true,
                 'sort_order' => 0,
             ]);
@@ -220,8 +262,8 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Produk berhasil diupdate',
-            'data'    => $this->formatProduct($product->load(['category', 'seller', 'primaryImage'])),
+            'message' => 'Product updated',
+            'data'    => $this->formatProduct($product->load(['category', 'seller.store', 'primaryImage'])),
         ]);
     }
 
@@ -240,7 +282,7 @@ class ProductController extends Controller
         if ($product->seller_id !== auth()->id() && auth()->user()->role !== 'admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda tidak memiliki akses untuk menghapus data ini',
+                'message' => "You don't have permission to delete this product",
             ], 403);
         }
 
@@ -248,11 +290,32 @@ class ProductController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Produk berhasil dihapus',
+            'message' => 'Product deleted',
         ]);
     }
 
     // Helper
+
+    /**
+     * Push the uploaded image to Cloudinary.
+     *
+     * Returns the URL, or false when the upload failed. A misconfigured
+     * CLOUDINARY_* variable throws from deep inside the SDK, and without this
+     * the caller gets a bare 500 that says nothing about what went wrong.
+     */
+    private function uploadThumbnail(Request $request): string|false
+    {
+        try {
+            $path = $request->file('thumbnail')->store('products', 'cloudinary');
+
+            return Storage::disk('cloudinary')->url($path);
+        } catch (Throwable $e) {
+            report($e);
+
+            return false;
+        }
+    }
+
     private function getRatingLabel(float $rating): string
     {
         if ($rating >= 8.5) return 'Top Rated';
@@ -285,12 +348,14 @@ class ProductController extends Controller
             'seller'         => $product->seller ? [
                 'id'   => $product->seller->id,
                 'name' => $product->seller->name,
-                'store' => $product->seller->store ? [
-                    'name'   => $product->seller->store->name,
-                    'slug' => $product->seller->store->slug,
-                    'city' => $product->seller->store->city,
+                // Named 'shop' to match what the frontend reads. The word
+                // 'store' collides with Laravel's own store() everywhere else.
+                'shop' => $product->seller->store ? [
+                    'name'     => $product->seller->store->name,
+                    'slug'     => $product->seller->store->slug,
+                    'city'     => $product->seller->store->city,
                     'province' => $product->seller->store->province,
-                    'is_open' => $product->seller->store->is_open,
+                    'is_open'  => $product->seller->store->is_open,
                 ] : null,
             ] : null,
         ];

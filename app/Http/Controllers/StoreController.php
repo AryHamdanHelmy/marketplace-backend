@@ -20,6 +20,9 @@ class StoreController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Shops retrieved',
+            'meta'    => [
+                'total' => $shop->total(),
+            ],
             'data' => collect($shops->items())->map(fn ($shop) => [
                 'name'        => $shop->name,
                 'slug'        => $shop->slug,

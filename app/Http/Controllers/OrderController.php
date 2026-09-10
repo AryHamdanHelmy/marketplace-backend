@@ -294,6 +294,7 @@ class OrderController extends Controller
             'status'         => $trx->status,
             'total_amount'   => $trx->total_amount,
             'paid_at'        => $trx->paid_at,
+            'shipping_address'=> $trx->shipping_address,
             'shipped_at'     => $trx->shipped_at,
             'completed_at'   => $trx->completed_at,
             'cancelled_at'   => $trx->cancelled_at,
