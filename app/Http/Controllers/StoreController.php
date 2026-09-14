@@ -63,6 +63,8 @@ class StoreController extends Controller
             'description' => 'nullable|string|max:1000',
             'city' => 'nullable|string|max:100',
             'province' => 'nullable|string|max:100',
+            'origin_area_id'    => 'nullable|string|max:40',
+            'origin_area_label' => 'nullable|string|max:255',
             // Multipart sends booleans as "1"/"0" strings, so accept both
             'is_open' => 'sometimes|boolean',
             'logo' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:2048',

@@ -19,6 +19,8 @@ class Store extends Model
         'banner_url',
         'city',
         'province',
+        'origin_area_id',
+        'origin_area_label',
         'is_open',
         'bank_name',
         'bank_account_number',

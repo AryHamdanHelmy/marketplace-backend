@@ -18,6 +18,8 @@ class Address extends Model
         'province',
         'postal_code',
         'courier_note',
+        'destination_area_id',
+        'destination_area_label',
         'is_default',
     ];
 

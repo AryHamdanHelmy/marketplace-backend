@@ -134,6 +134,8 @@ class AddressController extends Controller
             'province' => 'required|string|max:100',
             'postal_code' => 'nullable|string|max:10',
             'courier_note' => 'nullable|string|max:255',
+            'destination_area_id'    => 'nullable|string|max:40',
+            'destination_area_label' => 'nullable|string|max:255',
             'is_default' => 'sometimes|boolean',
         ], [
             'phone.regex' => 'Enter a valid phone number.',
