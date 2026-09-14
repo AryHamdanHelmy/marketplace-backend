@@ -33,6 +33,7 @@ class CartController extends Controller
                 'title'     => $item->product->name,
                 'price'     => $item->product->price,
                 'thumbnail' => $item->product->primaryImage?->image_path,
+                'seller_id' => $item->product->seller_id,
                 'seller'    => $item->product->seller?->name,
             ],
             'subtotal' => $item->quantity * $item->product->price,

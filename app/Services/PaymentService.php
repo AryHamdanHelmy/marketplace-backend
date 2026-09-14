@@ -71,7 +71,14 @@ class PaymentService
             throw new RuntimeException('These orders are no longer awaiting payment.');
         }
 
-        $amount = (float) $orders->sum('total_amount');
+        $amount = (float) $orders->reduce(
+            fn ($carry, $o) => bcadd(
+                $carry,
+                bcadd((string) $o->total_amount, (string) $o->Shipping_cost, 2),
+                2
+            ),
+            '0'
+        );
         $gateway = $this->gateway();
 
         // The row is written first so a charge can never exist at the provider

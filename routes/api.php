@@ -14,6 +14,7 @@ use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SellerBalanceController;
 use App\Http\Controllers\SellerStatsController;
+use App\Http\Controllers\ShippingController;
 use App\Http\Controllers\StoreController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -115,4 +116,8 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::get('/payments/{checkoutGroupId}', [PaymentController::class, 'show']);
     Route::post('/payments/{checkoutGroupId}/charge', [PaymentController::class, 'charge']);
     Route::post('/payments/{checkoutGroupId}/refresh', [PaymentController::class, 'refresh'])->middleware('throttle:10,1');
+
+    Route::get('shipping/areas', [ShippingController::class, 'areas'])
+    ->middleware('throttle:60,1');
+    Route::post('shipping/quote', [ShippingController::class, 'quote']);
 });

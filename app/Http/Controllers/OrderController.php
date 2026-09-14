@@ -242,6 +242,7 @@ class OrderController extends Controller
     {
         $validated = $request->validate([
             'status' => 'required|in:shipped',
+            'tracking_number' => 'nullable|string|max:60',
         ]);
 
         $userId = $request->user()->id;
@@ -267,9 +268,40 @@ class OrderController extends Controller
                 abort(422, "Cannot change status from {$order->status} to {$validated['status']}");
             }
 
+            // Resi wajib kalau pesanan ini memang punya kurir dari checkout.
+            // Pesanan lama (sebelum fitur ongkir) tidak punya courier_code dan
+            // tetap boleh dikirim tanpa resi — kalau tidak, pesanan yang sudah
+            // terlanjur ada jadi mustahil diselesaikan.
+            $tracking = $validated['tracking_number'] ?? null;
+            $tracking = $tracking ? strtoupper(preg_replace('/\s+/', '', $tracking)) : null;
+
+            if ($order->courier_code && !$tracking) {
+                abort(422, 'Enter the tracking number before marking this as shipped.');
+            }
+
+            // Resi yang sama dipakai di pesanan lain hampir selalu salah tempel.
+            // Diblokir, karena kalau lolos, dua pembeli akan melihat riwayat
+            // pengiriman paket yang sama dan satu di antaranya salah.
+            if ($tracking) {
+                $clash = Transaction::where('tracking_number', $tracking)
+                    ->where('id', '!=', $order->id)
+                    ->exists();
+
+                if ($clash) {
+                    abort(422, 'That tracking number is already on another order.');
+                }
+            }
+
             $order->update([
-                'status'     => 'shipped',
-                'shipped_at' => now(),
+                'status'          => 'shipped',
+                'shipped_at'      => now(),
+                'tracking_number' => $tracking,
+
+                // Dikosongkan supaya job polling memperlakukan ini sebagai resi baru
+                // dan tidak menampilkan sisa riwayat dari resi sebelumnya kalau
+                // seller sempat salah input lalu dibetulkan.
+                'tracking_snapshot'   => null,
+                'tracking_checked_at' => null,
             ]);
 
             return $order;
@@ -306,7 +338,13 @@ class OrderController extends Controller
                 'amount' => $trx->payment->amount,
             ] : null,
             'item_count'     => $trx->items->count(),
-        ];
+            'courier'           => $trx->courier_code
+                ? trim(strtoupper($trx->courier_code) . ' ' . $trx->courier_service)
+                : null,
+            'tracking_number'   => $trx->tracking_number,
+            'tracking'          => $trx->tracking_snapshot,
+            'shipping_cost'     => $trx->shipping_cost,
+                    ];
 
         if ($withItems) {
             $data['items'] = $trx->items->map(fn($item) => [

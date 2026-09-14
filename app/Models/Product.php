@@ -20,11 +20,13 @@ class Product extends Model
         'rating',
         'file_path',
         'download_count',
+        'weight_grams',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'stock' => 'integer',
+        'weight_grams' => 'integer',
     ];
 
     // Relasi ke User (seller)

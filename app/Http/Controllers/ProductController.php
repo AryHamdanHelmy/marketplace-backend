@@ -126,6 +126,7 @@ class ProductController extends Controller
                 'stock'       => 'nullable|integer|min:0',
                 'rating'      => 'nullable|numeric|min:0|max:10',
                 'status'      => 'nullable|in:draft,active,inactive',
+                'weight_grams' => 'nullable|integer|min:1|max:500000',
                 'file_path'   => 'nullable|string',
                 'download_count' => 'nullable|integer|min:0',
                 'thumbnail'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',

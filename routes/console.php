@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('orders:auto-complete')->dailyAt('02:00');
 schedule::command('payments:expire')->hourly();
+Schedule::command('shipping:poll')->hourly();
