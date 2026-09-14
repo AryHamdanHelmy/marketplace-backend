@@ -46,6 +46,8 @@ class ProductCategoryController extends Controller
                 ->map(fn($c) => [
                     'id'          => $c->id,
                     'name'        => $c->name,
+                    'icon'        => $c->icon,
+                    'image_url'   => $c->image_url,
                     'parent_id'   => $c->parent_id,
                     'parent_name' => $c->parent?->name,
                 ]);
@@ -73,6 +75,9 @@ class ProductCategoryController extends Controller
                     'id'   => $child->id,
                     'name' => $child->name,
                     'icon' => $child->icon,
+                    'image_url' => $child->image_url,
+                    'description' => $child->description,
+                    'short_order' => $child->sort_order,
                 ]),
             ]);
 
@@ -86,7 +91,7 @@ class ProductCategoryController extends Controller
     public function show($id)
     {
         $category = ProductCategory::find($id);
-        if (!category){
+        if (!$category){
             return response()->json([
                 'success' => false,
                 'message' => 'Data tidak ditemukan',
@@ -153,7 +158,7 @@ class ProductCategoryController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Kategori berhasil di update',
-            'data'    => $category,
+            'data'    => $category->fresh(),
         ]);
     }
 

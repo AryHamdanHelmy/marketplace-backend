@@ -21,7 +21,7 @@ class StoreController extends Controller
             'success' => true,
             'message' => 'Shops retrieved',
             'meta'    => [
-                'total' => $shop->total(),
+                'total' => $shops->total(),
             ],
             'data' => collect($shops->items())->map(fn ($shop) => [
                 'name'        => $shop->name,
