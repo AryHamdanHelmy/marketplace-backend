@@ -8,5 +8,5 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('order:auto-complete')->dailyAt('02:00');
+Schedule::command('orders:auto-complete')->dailyAt('02:00');
 schedule::command('payments:expire')->hourly();

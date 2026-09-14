@@ -23,7 +23,7 @@ return [
 
     'gateways' => [
         'manual' => \App\Payments\Gateways\ManualTransferGateway::class,
-        // 'midtrans' => \App\Payments\Gateways\MidtransGateway::class,
+        'midtrans' => \App\Payments\Gateways\MidtransGateway::class,
     ],
 
     /*
