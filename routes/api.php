@@ -36,7 +36,7 @@ Route::get('/categories/{categories}', [ProductCategoryController::class, 'show'
 Route::get('/shops', [StoreController::class, 'publicIndex']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
-Route::post('payment/webhook/{gateway}', [PaymentController::class, 'webhook']);
+Route::post('payments/webhook/{gateway}', [PaymentController::class, 'webhook']);
 Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
     return response()->json([
         'ip'              => $request->ip(),
