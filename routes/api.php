@@ -37,7 +37,8 @@ Route::get('/categories/{categories}', [ProductCategoryController::class, 'show'
 Route::get('/shops', [StoreController::class, 'publicIndex']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
-Route::post('payments/webhook/{gateway}', [PaymentController::class, 'webhook']);
+Route::post('payments/webhook/{gateway}', [PaymentController::class, 'webhook'])
+    ->withoutMiddleware('throttle:api');
 Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
     return response()->json([
         'ip'              => $request->ip(),
