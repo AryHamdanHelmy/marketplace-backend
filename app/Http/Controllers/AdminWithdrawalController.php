@@ -70,7 +70,9 @@ class AdminWithdrawalController extends Controller
             'message' => 'Withdrawal retrieved',
             'data' => [
                 ...$this->format($withdrawal),
-                'bank_account_number' => $withdrawal->getAttributes()['bank_account_number'],
+                // Lewat accessor supaya terdekripsi. getAttributes() akan
+                // mengembalikan ciphertext-nya.
+                'bank_account_number' => $withdrawal->bank_account_number,
             ],
         ]);
     }
