@@ -15,7 +15,7 @@ class StoreController extends Controller
     {
         $shops = Store::where('is_open', true)
             ->orderByDesc('created_at')
-            ->paginate($request->query('per_page', 12));
+            ->paginate($this->perPage($request, 12));
 
         return response()->json([
             'success' => true,

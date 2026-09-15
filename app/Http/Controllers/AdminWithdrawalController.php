@@ -19,9 +19,19 @@ class AdminWithdrawalController extends Controller
         $withdrawals = Withdrawal::with('seller:id,name,email')
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             // Oldest first: sellers waiting longest get paid first.
-            ->orderBy(DB::raw("FIELD(status, 'pending', 'processing', 'completed', 'rejected')"))
+            //
+            // FIELD() hanya ada di MySQL, tidak bisa memakai index, dan bikin
+            // endpoint ini pecah di SQLite — yang dipakai test suite. CASE
+            // menghasilkan urutan yang sama dan dimengerti semua mesin.
+            ->orderByRaw(
+                "CASE status"
+                . " WHEN 'pending' THEN 1"
+                . " WHEN 'processing' THEN 2"
+                . " WHEN 'completed' THEN 3"
+                . " ELSE 4 END"
+            )
             ->orderBy('created_at')
-            ->paginate($request->query('per_page', 20));
+            ->paginate($this->perPage($request, 20));
 
         return response()->json([
             'success' => true,

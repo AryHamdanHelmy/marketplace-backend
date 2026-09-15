@@ -23,7 +23,7 @@ class OrderController extends Controller
         }
 
         $orders = $query->orderByDesc('created_at')
-            ->paginate($request->query('per_page', 10));
+            ->paginate($this->perPage($request, 10));
 
         return response()->json([
             'success' => true,
@@ -182,7 +182,7 @@ class OrderController extends Controller
         }
 
         $orders = $query->orderByDesc('created_at')
-            ->paginate($request->query('per_page', 10));
+            ->paginate($this->perPage($request, 10));
 
         return response()->json([
             'success' => true,

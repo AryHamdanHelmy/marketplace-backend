@@ -14,7 +14,7 @@ class AuthController extends Controller
     {
         if ($deny = $this->denyIfNotAdmin()) return $deny;
 
-        $perPage = $request->query("per_page", 10);
+        $perPage = $this->perPage($request, 10);
         $users = User::select("id", "name", "email", "role")
             ->paginate($perPage);
 
