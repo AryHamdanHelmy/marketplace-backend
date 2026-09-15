@@ -59,51 +59,17 @@ class OrderController extends Controller
         ]);
     }
 
-    // POST /api/orders/{id}/pay
-    public function pay(Request $request, $id)
-    {
-        $userId = $request->user()->id;
-
-        try {
-            $order = DB::transaction(function () use ($id, $userId) {
-
-                // Lock supaya double-click tidak memproses pembayaran dua kali
-                $order = Transaction::where('buyer_id', $userId)
-                    ->lockForUpdate()
-                    ->find($id);
-
-                if (!$order) {
-                    abort(404, 'Order not found');
-                }
-
-                if ($order->status !== 'pending') {
-                    abort(422, "Order cannot be paid, current status: {$order->status}");
-                }
-
-                $order->update([
-                    'status'  => 'paid',
-                    'paid_at' => now(),
-                ]);
-
-                // Sinkronkan record payment
-                $order->payment?->update([
-                    'status'  => 'verified',
-                    'paid_at' => now(),
-                ]);
-
-                return $order;
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment confirmed successfully',
-                'data'    => $this->formatOrder($order->fresh(['items', 'payment']), true),
-            ]);
-
-        } catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
-            throw $e;
-        }
-    }
+    // Pembayaran tidak lagi bisa dikonfirmasi dari sisi pembeli.
+    //
+    // Endpoint POST /api/orders/{id}/pay dulu menandai pesanannya sendiri
+    // 'paid' tanpa menyentuh gateway sama sekali — sisa dari era konfirmasi
+    // manual. Setelah Midtrans masuk, endpoint itu jadi jalan pintas: siapa
+    // pun yang punya token bisa melunasi pesanannya sendiri tanpa membayar,
+    // lalu menarik uangnya lewat saldo seller.
+    //
+    // Satu-satunya jalur yang boleh menaikkan status ke 'paid' sekarang
+    // adalah PaymentService::applyResult(), yang hanya dipanggil dari hasil
+    // gateway yang sudah lolos verifikasi tanda tangan.
 
     // POST /api/orders/{id}/cancel
     public function cancel(Request $request, $id)

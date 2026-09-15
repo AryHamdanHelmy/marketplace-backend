@@ -76,7 +76,13 @@ Route::middleware('auth:sanctum')->group(function(){
     // Buyer
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
-    Route::post('/orders/{id}/pay', [OrderController::class, 'pay']);
+    // Dihapus: dulu endpoint ini menandai pesanan 'paid' hanya atas permintaan
+    // pembelinya sendiri, tanpa verifikasi ke gateway. Dibiarkan sebagai 410
+    // supaya klien lama mendapat jawaban yang menjelaskan, bukan 404 kosong.
+    Route::post('/orders/{id}/pay', fn () => response()->json([
+        'success' => false,
+        'message' => 'Pembayaran diproses lewat POST /api/payments/{checkout_group_id}/charge.',
+    ], 410));
     Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{id}/confirm', [OrderController::class, 'confirmReceipt']);
     Route::get('/profile', [ProfileController::class, 'show']);

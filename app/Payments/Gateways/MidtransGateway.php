@@ -123,6 +123,17 @@ class MidtransGateway implements PaymentGateway
 
     public function parseWebhook(array $payload, array $headers): ?WebhookResult
     {
+        // Tanpa server key, hash di bawah dihitung terhadap string kosong —
+        // dan string kosong adalah sesuatu yang bisa ditebak siapa pun. Satu
+        // env var yang lupa diisi saat deploy akan mengubah pemeriksaan tanda
+        // tangan jadi formalitas yang bisa dipalsukan dari luar. Lebih baik
+        // menolak semua notifikasi daripada menerima yang palsu.
+        if (!$this->serverKey()) {
+            Log::error('Midtrans webhook ditolak: MIDTRANS_SERVER_KEY belum diset.');
+
+            return null;
+        }
+
         $orderId = $payload['order_id'] ?? null;
         $statusCode = $payload['status_code'] ?? null;
         $grossAmount = $payload['gross_amount'] ?? null;

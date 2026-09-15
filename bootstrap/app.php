@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '100.64.0.0/10');
+
+        // Memasang limiter 'api' (lihat AppServiceProvider) ke seluruh grup
+        // api. Laravel tidak melakukannya sendiri sejak versi 11, dan tanpa
+        // baris ini hanya segelintir route yang punya throttle eksplisit.
+        $middleware->throttleApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
