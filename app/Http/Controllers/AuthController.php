@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ReleasesEmails;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -10,6 +11,8 @@ use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    use ReleasesEmails;
+
     public function index(Request $request)
     {
         if ($deny = $this->denyIfNotAdmin()) return $deny;
@@ -86,7 +89,27 @@ class AuthController extends Controller
 
         $user = User::where("email", $validated["email"])->first();
 
-        if (!$user || !Hash::check($validated["password"], $user->password)) {
+        if (!$user) {
+            return response()->json([
+                "message" => "That email and password don't match.",
+            ], 401);
+        }
+
+        // An account created through Google or Apple has no password of ours.
+        // Saying so beats a flat rejection that leaves the person retyping a
+        // password they never set, and this API already confirms which
+        // addresses are registered through auth/check-email.
+        if (!$user->hasPassword()) {
+            $provider = $user->socialAccounts()->value("provider");
+
+            return response()->json([
+                "message" => $provider
+                    ? "This account signs in with " . ucfirst($provider) . ". Use that button, or set a password through Forgot password."
+                    : "This account has no password yet. Set one through Forgot password.",
+            ], 409);
+        }
+
+        if (!Hash::check($validated["password"], $user->password)) {
             return response()->json([
                 "message" => "That email and password don't match.",
             ], 401);
@@ -130,6 +153,10 @@ class AuthController extends Controller
         DB::transaction(function () use ($user) {
             // Kill every active session immediately.
             $user->tokens()->delete();
+
+            // Unlink the providers too, so signing in with Google again
+            // starts a new account instead of landing on this deleted one.
+            $user->socialAccounts()->delete();
 
             // Release the address so the person can sign up again, while the
             // row itself stays behind for the audit trail.
@@ -220,20 +247,6 @@ class AuthController extends Controller
         return response()->json([
             "exists" => $exists,
         ]);
-    }
-
-    // Builds the parked form of a deleted account's address, e.g.
-    // "deleted+12+ary@gmail.com". The id keeps it unique and the original
-    // address stays readable for support and audit purposes.
-    private function releasedEmail(int $id, string $email): string
-    {
-        $prefix = "deleted+{$id}+";
-
-        if (str_starts_with($email, "deleted+")) {
-            return $email;
-        }
-
-        return substr($prefix . $email, 0, 255);
     }
 
     private function denyIfNotAdmin()

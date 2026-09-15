@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    // Sign-in providers. Every client id that may appear as the "aud" of an
+    // id_token we accept has to be listed: a native app normally has one per
+    // platform (an Android id, an iOS id, a web id), and a token addressed to
+    // an id we don't list is rejected.
+    'google' => [
+        'client_ids' => array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GOOGLE_CLIENT_IDS', env('GOOGLE_CLIENT_ID', '')))
+        )),
+    ],
+
+    // For Apple these are the bundle id of the app and, if the web flow is
+    // used, the Services ID.
+    'apple' => [
+        'client_ids' => array_filter(array_map(
+            'trim',
+            explode(',', (string) env('APPLE_CLIENT_IDS', env('APPLE_CLIENT_ID', '')))
+        )),
+    ],
+
 ];

@@ -68,9 +68,22 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'current_password' => 'required|string',
+            // Nothing to confirm when the account has no password yet: a
+            // Google or Apple sign-in never set one. Holding a valid token
+            // for the account is the proof in that case.
+            'current_password' => $user->hasPassword() ? 'required|string' : 'nullable|string',
             'password' => 'required|min:8|confirmed',
         ]);
+
+        if (!$user->hasPassword()) {
+            $user->password = Hash::make($validated['password']);
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Password set. You can now sign in with your email too.',
+            ]);
+        }
 
         // Proving they know the current password is what stops someone who
         // walked up to an unlocked laptop from taking the account over.

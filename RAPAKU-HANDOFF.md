@@ -73,6 +73,56 @@ Voice: English UI, Indonesian locale formatting (`Rp 125.000`, `12 Mar 2026`). S
 
 ---
 
+## Social sign-in (Google / Apple)
+
+`POST /api/auth/social/{provider}` — `provider` is `google` or `apple`. Throttled 10/min.
+
+```json
+{ "id_token": "<from the Google/Apple SDK>", "nonce": "<optional>", "role": "buyer|seller" }
+```
+
+Replies with the same `{ user, token }` the password login does, plus
+`is_new_user` and `needs_email`. `201` when the sign-in created the account,
+`200` when it signed an existing one in. `role` is read only on creation.
+
+**The client does the OAuth dance, we verify the result.** The Google/Apple SDK
+on the device returns an `id_token`; we check its signature against the
+provider's published keys (cached 12h, refetched on a key we haven't seen),
+check `iss`, check `aud` against our own client ids, and check the `nonce` when
+the app sent one. No redirect endpoints, no session state, no Passport — the
+API stays stateless and the existing Sanctum tokens keep working unchanged.
+
+Passing a profile blob or an `access_token` instead would be the hole here:
+either can carry someone else's email. Only a provider-signed token addressed
+to one of our client ids gets in.
+
+**Returning users are matched on the provider's `sub`**, not the email — people
+change the email on a Google account, and Apple hands out relay addresses that
+can be switched off. Email is only used to link a *first* social sign-in to an
+account that already exists, and only when the provider marked it verified.
+
+**Accounts with no password.** `users.password` is now nullable. Password login
+on such an account returns `409` with a message naming the provider instead of a
+bare "wrong password", and `PUT /api/profile/password` lets them set a first
+password without a `current_password` (holding a valid token is the proof).
+`Forgot password` also works as a way in.
+
+**Apple sometimes sends no email.** The account is created with a placeholder
+`apple_<hash>@no-reply.invalid` and `needs_email: true` — the app should ask for
+a real address and `PUT /api/profile`.
+
+Set up: one client id per platform, comma-separated.
+
+```
+GOOGLE_CLIENT_IDS=123-android.apps.googleusercontent.com,123-ios.apps.googleusercontent.com
+APPLE_CLIENT_IDS=com.rapaku.app
+```
+
+Covered by `tests/Feature/SocialAuthTest.php` (22 tests), including forged
+signatures, wrong audience, wrong issuer, expired tokens and replayed nonces.
+
+---
+
 ## Key decisions and why
 
 **Store health is a real formula**, not a decorative number: on-time processing 35%, fulfilment 25%, buyer rating 25%, stock availability 15%. Components without data are dropped and remaining weights rescaled, so new shops aren't punished. Breakdown ships with the score.
@@ -116,6 +166,8 @@ Voice: English UI, Indonesian locale formatting (`Rp 125.000`, `12 Mar 2026`). S
 ```
 FRONTEND_URL=https://rapaku.vercel.app
 MAIL_MAILER=smtp        # currently log — reset emails never reach real inboxes
+GOOGLE_CLIENT_IDS=      # social sign-in rejects every token while these are empty
+APPLE_CLIENT_IDS=
 ```
 
 - Run `php artisan migrate --force`
