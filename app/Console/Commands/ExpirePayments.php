@@ -13,6 +13,7 @@ use Throwable;
 class ExpirePayments extends Command
 {
     protected $signature = 'payments:expire
+                            {--abandoned-hours= : Usia checkout terbengkalai sebelum stoknya dilepas}
                             {--dry-run : List what would expire without changing anything}';
 
     protected $description = 'Expire lapsed payment charges, cancel their orders, and return the reserved stock';
@@ -21,6 +22,23 @@ class ExpirePayments extends Command
     {
         $dryRun = (bool) $this->option('dry-run');
 
+        $status = $this->expireCharges($dryRun);
+
+        // Sapuan kedua: checkout yang tidak pernah sampai ke halaman
+        // pembayaran sama sekali. Tanpa ini stoknya tertahan selamanya —
+        // lihat keterangan di releaseAbandonedCheckouts().
+        $abandoned = $this->releaseAbandonedCheckouts($dryRun);
+
+        return $status === self::SUCCESS && $abandoned === self::SUCCESS
+            ? self::SUCCESS
+            : self::FAILURE;
+    }
+
+    /**
+     * Sapuan pertama: charge yang sudah lewat batas waktunya.
+     */
+    private function expireCharges(bool $dryRun): int
+    {
         $query = PaymentOrder::whereIn('status', ['pending', 'awaiting_payment'])
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now());
@@ -96,6 +114,117 @@ class ExpirePayments extends Command
         return self::SUCCESS;
     }
 
+
+    /**
+     * Sapuan kedua: checkout yang stoknya ditahan tapi tidak pernah ditagih.
+     *
+     * Stok dikurangi saat POST /checkout, sebelum pembeli memilih metode
+     * pembayaran. Kalau ia menutup tab di situ, tidak pernah ada PaymentOrder
+     * yang lahir — dan sapuan pertama hanya melihat PaymentOrder. Akibatnya
+     * transaksi 'pending' itu memegang stoknya selamanya, dan barang yang
+     * sebenarnya tersedia tampak habis bagi pembeli lain.
+     *
+     * Ambang waktunya sengaja lebih longgar dari masa berlaku charge: sebuah
+     * checkout hanya dianggap terbengkalai kalau tidak ada lagi tagihan hidup
+     * yang menaunginya. Kalau charge-nya masih bisa dibayar, sapuan ini
+     * melewatinya dan menyerahkan urusan ke sapuan pertama.
+     */
+    private function releaseAbandonedCheckouts(bool $dryRun): int
+    {
+        $hours = (int) ($this->option('abandoned-hours')
+            ?: config('payments.expiry_hours', 24) + 1);
+
+        if ($hours < 1) {
+            $this->error('--abandoned-hours minimal 1.');
+
+            return self::FAILURE;
+        }
+
+        $cutoff = now()->subHours($hours);
+
+        // Grup yang masih punya tagihan hidup atau sudah lunas bukan urusan
+        // sapuan ini. Sisanya — tidak pernah ditagih, gagal saat ditagih,
+        // atau tagihannya sudah kedaluwarsa — stoknya harus kembali.
+        $sheltered = PaymentOrder::query()
+            ->where(function ($q) {
+                $q->whereIn('status', ['paid', 'refunded'])
+                    ->orWhere(function ($live) {
+                        $live->whereIn('status', ['pending', 'awaiting_payment'])
+                            ->whereNotNull('expires_at')
+                            ->where('expires_at', '>', now());
+                    });
+            })
+            ->select('checkout_group_id');
+
+        $query = Transaction::where('status', 'pending')
+            ->where('created_at', '<=', $cutoff)
+            ->where(function ($q) use ($sheltered) {
+                $q->whereNull('checkout_group_id')
+                    ->orWhereNotIn('checkout_group_id', $sheltered);
+            });
+
+        $total = (clone $query)->count();
+
+        if ($total === 0) {
+            $this->info('Tidak ada checkout terbengkalai.');
+
+            return self::SUCCESS;
+        }
+
+        if ($dryRun) {
+            $this->info("{$total} pesanan terbengkalai akan dibatalkan (dibuat sebelum {$cutoff->toDateTimeString()}).");
+
+            return self::SUCCESS;
+        }
+
+        $cancelled = 0;
+        $released = 0;
+        $failed = 0;
+
+        $query->orderBy('id')->chunkById(50, function ($transactions) use (&$cancelled, &$released, &$failed) {
+            foreach ($transactions as $transaction) {
+                try {
+                    $outcome = DB::transaction(function () use ($transaction) {
+                        $fresh = Transaction::with('items')
+                            ->lockForUpdate()
+                            ->find($transaction->id);
+
+                        // Pembeli bisa saja membayar tepat di sela antara
+                        // query dan lock ini. Pembayarannya yang menang, dan
+                        // pesanannya tidak ikut terhitung dibatalkan.
+                        if (!$fresh || $fresh->status !== 'pending') {
+                            return null;
+                        }
+
+                        return $this->cancelTransactions(collect([$fresh]));
+                    });
+
+                    if ($outcome !== null) {
+                        $cancelled++;
+                        $released += $outcome;
+                    }
+                } catch (Throwable $e) {
+                    $failed++;
+                    Log::error('Melepas checkout terbengkalai gagal', [
+                        'transaction_id' => $transaction->id,
+                        'message' => $e->getMessage(),
+                    ]);
+                    $this->error("Pesanan {$transaction->id} gagal: {$e->getMessage()}");
+                }
+            }
+        });
+
+        $this->info("Membatalkan {$cancelled} pesanan terbengkalai, mengembalikan stok {$released} item.");
+
+        if ($failed > 0) {
+            $this->warn("{$failed} pesanan gagal — lihat log.");
+
+            return self::FAILURE;
+        }
+
+        return self::SUCCESS;
+    }
+
     /**
      * Cancel the seller orders behind an expired charge and put the stock back.
      *
@@ -107,11 +236,22 @@ class ExpirePayments extends Command
      */
     private function cancelOrders(PaymentOrder $order): int
     {
-        $transactions = Transaction::with('items')
-            ->where('checkout_group_id', $order->checkout_group_id)
-            ->lockForUpdate()
-            ->get();
+        return $this->cancelTransactions(
+            Transaction::with('items')
+                ->where('checkout_group_id', $order->checkout_group_id)
+                ->lockForUpdate()
+                ->get()
+        );
+    }
 
+    /**
+     * Batalkan sekumpulan transaksi dan kembalikan stoknya.
+     *
+     * @param  \Illuminate\Support\Collection<int, Transaction>  $transactions
+     * @return int jumlah baris item yang stoknya dikembalikan
+     */
+    private function cancelTransactions($transactions): int
+    {
         $released = 0;
 
         foreach ($transactions as $transaction) {
