@@ -74,7 +74,7 @@ class PaymentService
         $amount = (float) $orders->reduce(
             fn ($carry, $o) => bcadd(
                 $carry,
-                bcadd((string) $o->total_amount, (string) $o->Shipping_cost, 2),
+                bcadd((string) $o->total_amount, (string) $o->shipping_cost, 2),
                 2
             ),
             '0'

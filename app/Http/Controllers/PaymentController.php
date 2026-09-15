@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PaymentOrder;
+use App\Models\Transaction;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -141,12 +142,22 @@ class PaymentController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
-    private function format(PaymentOrder $order): array
+        private function format(PaymentOrder $order): array
     {
+        // Rinciannya dihitung dari transaksi, bukan disimpan di PaymentOrder.
+        // PaymentOrder sengaja hanya memegang satu angka — yang ditagih — dan
+        // menduplikasi pecahannya di sana berarti dua tempat yang bisa saling
+        // bertentangan setelah ongkir berubah.
+        $breakdown = Transaction::where('checkout_group_id', $order->checkout_group_id)
+            ->selectRaw('SUM(total_amount) as items, SUM(shipping_cost) as shipping')
+            ->first();
+
         return [
             'checkout_group_id' => $order->checkout_group_id,
             'reference' => $order->reference,
             'amount' => $order->amount,
+            'items_total' => (float) ($breakdown->items ?? 0),
+            'shipping_total' => (float) ($breakdown->shipping ?? 0),
             'gateway' => $order->gateway,
             'channel' => $order->channel,
             'status' => $order->status,

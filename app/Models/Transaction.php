@@ -15,7 +15,14 @@ class Transaction extends Model
         'seller_name',
         'status',
         'total_amount',
+        'shipping_cost',
+        'courier_code',
+        'courier_service',
+        'courier_etd',
+        'tracking_number',
         'paid_at',
+        'tracking_snapshot',
+        'tracking_checked_at',
         'shipped_at',
         'complated_at',
         'completed_by',
@@ -25,10 +32,13 @@ class Transaction extends Model
     protected $casts = [
         'total_amount' => 'decimal:2',
         'shipping_address' => 'array',
+        'shipping_cost'       => 'decimal:2',
+        'tracking_snapshot'   => 'array',
+        'tracking_checked_at' => 'datetime',
+        'shipped_at'          => 'datetime',
         'paid_at'      => 'datetime',
         'cancelled_at' => 'datetime',
         'completed_at'     => 'datetime',
-        'cancelled_at'     => 'datetime',
     ];
 
     public function items()
