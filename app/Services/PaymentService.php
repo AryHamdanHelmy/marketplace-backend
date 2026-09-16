@@ -6,6 +6,7 @@ use App\Models\PaymentOrder;
 use App\Models\Transaction;
 use App\Payments\PaymentGateway;
 use App\Payments\WebhookResult;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -102,15 +103,39 @@ class PaymentService
                 return $existing->fresh();
             }
 
-            return PaymentOrder::create([
-                'checkout_group_id' => $checkoutGroupId,
-                'buyer_id' => $buyerId,
-                'reference' => PaymentOrder::generateReference(),
-                'amount' => $amount,
-                'gateway' => $gateway->name(),
-                'channel' => $channel,
-                'status' => 'pending',
-            ]);
+            // checkout_group_id unik di tabel ini. Dua klik yang nyaris
+            // bersamaan sama-sama melihat "belum ada charge" di atas, lalu
+            // sama-sama insert; yang kalah dulu keluar sebagai 500. Sekarang
+            // yang kalah memakai baris pemenangnya.
+            try {
+                return PaymentOrder::create([
+                    'checkout_group_id' => $checkoutGroupId,
+                    'buyer_id' => $buyerId,
+                    'reference' => PaymentOrder::generateReference(),
+                    'amount' => $amount,
+                    'gateway' => $gateway->name(),
+                    'channel' => $channel,
+                    'status' => 'pending',
+                ]);
+            } catch (UniqueConstraintViolationException $e) {
+                $winner = PaymentOrder::where('checkout_group_id', $checkoutGroupId)
+                    ->where('buyer_id', $buyerId)
+                    ->first();
+
+                if (!$winner) {
+                    throw $e;
+                }
+
+                // Barisnya tidak dikembalikan begitu saja: pemanggil akan
+                // meneruskannya ke gateway, dan itu berarti charge kedua
+                // dengan reference yang sama — ditolak permanen oleh
+                // Midtrans, lalu baris milik pemenang ikut ditandai gagal.
+                // Klik kedua diminta mengulang; saat itu charge pemenang
+                // sudah jadi dan cabang "reuse" di atas yang melayaninya.
+                throw new RuntimeException(
+                    'Pembayaran untuk pesanan ini sedang dibuat. Coba lagi sebentar.'
+                );
+            }
         });
 
         $result = $gateway->createCharge($order, $channel);

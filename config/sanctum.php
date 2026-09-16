@@ -50,7 +50,12 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Token tanpa masa berlaku berarti satu token yang bocor berlaku
+    // selamanya, dan tabel personal_access_tokens tumbuh tanpa batas karena
+    // setiap login menerbitkan baris baru tanpa mencabut yang lama.
+    // 30 hari: cukup panjang supaya pembeli tidak login ulang tiap minggu,
+    // cukup pendek supaya token curian punya akhir.
+    'expiration' => (int) env('SANCTUM_TOKEN_EXPIRATION', 60 * 24 * 30),
 
     /*
     |--------------------------------------------------------------------------
