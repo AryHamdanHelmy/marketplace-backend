@@ -89,6 +89,22 @@ class AuthController extends Controller
     private const LOGIN_MAX_PER_IP = 5;
     private const LOGIN_MAX_PER_ACCOUNT = 20;
 
+    /**
+     * Hash tanding untuk email yang tidak ditemukan, satu per konfigurasi.
+     *
+     * Dihitung saat dibutuhkan, bukan ditulis sebagai konstanta, supaya
+     * biayanya selalu mengikuti konfigurasi hashing yang sedang berlaku.
+     * Hash dengan cost yang berbeda dari milik pengguna justru menciptakan
+     * selisih waktu baru — hanya arahnya yang terbalik, dan kebocorannya
+     * sama saja.
+     *
+     * Disimpan per kunci konfigurasi, bukan satu nilai untuk seumur proses:
+     * cache tunggal akan tetap memakai cost lama setelah BCRYPT_ROUNDS
+     * dinaikkan, dan justru menghidupkan kembali selisih yang ditutup di
+     * sini.
+     */
+    private static array $dummyHashes = [];
+
     public function login(Request $request)
     {
         $validated = $request->validate([
@@ -109,10 +125,21 @@ class AuthController extends Controller
 
         $user = User::where("email", $validated["email"])->first();
 
-        if (!$user || !Hash::check($validated["password"], $user->password)) {
+        // Password diperiksa dengan cara yang sama apakah akunnya ada atau
+        // tidak. Kalau cabang "email tidak terdaftar" langsung keluar, ia
+        // menjawab dalam waktu yang jauh lebih singkat daripada cabang
+        // "password salah" — dan selisih itu sendiri sudah memberi tahu
+        // penyerang alamat mana yang terdaftar, persis informasi yang dulu
+        // dibagikan cuma-cuma oleh /auth/check-email.
+        $passwordMatches = $user
+            ? Hash::check($validated["password"], $user->password)
+            : Hash::check($validated["password"], $this->dummyHash());
+
+        if (!$user || !$passwordMatches) {
             RateLimiter::hit($ipKey, 60);
             RateLimiter::hit($accountKey, 900);
 
+            // Pesan dan status yang sama persis untuk kedua sebab.
             return response()->json([
                 "message" => "That email and password don't match.",
             ], 401);
@@ -130,6 +157,14 @@ class AuthController extends Controller
             "user" => $user,
             "token" => $token,
         ]);
+    }
+
+    private function dummyHash(): string
+    {
+        $driver = config('hashing.driver', 'bcrypt');
+        $key = $driver . ':' . json_encode(config("hashing.{$driver}", []));
+
+        return static::$dummyHashes[$key] ??= Hash::make(Str::random(40));
     }
 
     /**
@@ -251,19 +286,6 @@ class AuthController extends Controller
                 "email" => $user->email,
                 "role" => $user->role,
             ],
-        ]);
-    }
-
-    public function checkEmail(Request $request)
-    {
-        $validated = $request->validate([
-            "email" => "required|email",
-        ]);
-
-        $exists = User::where("email", $validated["email"])->exists();
-
-        return response()->json([
-            "exists" => $exists,
         ]);
     }
 

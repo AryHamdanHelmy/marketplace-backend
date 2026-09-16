@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\AdminRefundController;
 use App\Http\Controllers\AdminWithdrawalController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
@@ -25,7 +26,6 @@ Route::get('/user', function (Request $request) {
 
 Route::post('auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
 Route::post('auth/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-Route::post('auth/check-email', [AuthController::class, 'checkEmail'])->middleware('throttle:10,1');
 Route::post('auth/forgot-password', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1');
 Route::post('auth/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1');
 
@@ -65,6 +65,12 @@ Route::middleware('auth:sanctum')->group(function(){
     Route::patch('/admin/withdrawals/{id}/processing', [AdminWithdrawalController::class, 'markProcessing']);
     Route::patch('/admin/withdrawals/{id}/complete', [AdminWithdrawalController::class, 'complete']);
     Route::patch('/admin/withdrawals/{id}/reject', [AdminWithdrawalController::class, 'reject']);
+
+    // Refund manual: pembeli menghubungi dukungan, admin memutuskan dan
+    // mentransfer sendiri. Lihat App\Services\RefundService.
+    Route::get('/admin/refunds', [AdminRefundController::class, 'index']);
+    Route::post('/admin/orders/{id}/refund-pending', [AdminRefundController::class, 'markPending']);
+    Route::patch('/admin/refunds/{id}/refunded', [AdminRefundController::class, 'markRefunded']);
 
     // Buyer
     Route::get('/orders', [OrderController::class, 'index']);
