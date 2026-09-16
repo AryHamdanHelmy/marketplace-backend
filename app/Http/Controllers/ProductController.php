@@ -72,7 +72,7 @@ class ProductController extends Controller
         $order = $request->order === 'asc' ? 'asc' : 'desc';
         $query->orderBy($sortBy, $order);
 
-        $perPage = $request->query('per_page', 12);
+        $perPage = $this->perPage($request, 12);
         $products = $query->paginate($perPage);
 
         return response()->json([

@@ -41,6 +41,10 @@ class Store extends Model
     {
         return [
             'is_open' => 'boolean',
+            // Terenkripsi di database. Masking saja tidak cukup: itu hanya
+            // menyembunyikan nomor di respons API, sementara barisnya sendiri
+            // tetap terbaca oleh siapa pun yang memegang dump atau backup.
+            'bank_account_number' => 'encrypted',
         ];
     }
 
@@ -94,7 +98,10 @@ class Store extends Model
     // without the full number sitting in an API response.
     public function getMaskedAccountNumberAttribute(): ?string
     {
-        $number = $this->attributes['bank_account_number'] ?? null;
+        // Lewat accessor cast, bukan $this->attributes — yang terakhir kini
+        // berisi ciphertext, dan empat karakter terakhirnya tidak berarti apa
+        // pun bagi seller.
+        $number = $this->bank_account_number;
 
         if (!$number) {
             return null;

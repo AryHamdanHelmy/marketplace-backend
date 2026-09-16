@@ -23,7 +23,7 @@ class OrderController extends Controller
         }
 
         $orders = $query->orderByDesc('created_at')
-            ->paginate($request->query('per_page', 10));
+            ->paginate($this->perPage($request, 10));
 
         return response()->json([
             'success' => true,
@@ -89,7 +89,12 @@ class OrderController extends Controller
             }
 
             if (!$order->isCancellable()) {
-                abort(422, "Order cannot be cancelled, current status: {$order->status}");
+                // Pesan yang berbeda untuk pesanan berbayar: pembeli perlu
+                // tahu ke mana harus pergi, bukan sekadar bahwa tombolnya
+                // tidak berlaku.
+                abort(422, $order->status === 'paid'
+                    ? 'Pesanan yang sudah dibayar tidak bisa dibatalkan sendiri. Hubungi dukungan untuk proses pengembalian dana.'
+                    : "Order cannot be cancelled, current status: {$order->status}");
             }
 
             // Kembalikan stok — urutkan by product_id untuk mencegah deadlock,
@@ -177,7 +182,7 @@ class OrderController extends Controller
         }
 
         $orders = $query->orderByDesc('created_at')
-            ->paginate($request->query('per_page', 10));
+            ->paginate($this->perPage($request, 10));
 
         return response()->json([
             'success' => true,

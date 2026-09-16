@@ -49,7 +49,7 @@ class SellerBalanceController extends Controller
         $logs = BalanceLog::where('seller_id', $request->user()->id)
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->type))
             ->orderByDesc('id')
-            ->paginate($request->query('per_page', 20));
+            ->paginate($this->perPage($request, 20));
 
         return response()->json([
             'success' => true,
@@ -78,7 +78,7 @@ class SellerBalanceController extends Controller
 
         $withdrawals = Withdrawal::where('seller_id', $request->user()->id)
             ->orderByDesc('id')
-            ->paginate($request->query('per_page', 20));
+            ->paginate($this->perPage($request, 20));
 
         return response()->json([
             'success' => true,

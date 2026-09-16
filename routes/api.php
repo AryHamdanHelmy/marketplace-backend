@@ -39,14 +39,6 @@ Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::get('/shops/{store}', [StoreController::class, 'publicShow']);
 Route::post('payments/webhook/{gateway}', [PaymentController::class, 'webhook'])
     ->withoutMiddleware('throttle:api');
-Route::get('/debug-ip', function (\Illuminate\Http\Request $request) {
-    return response()->json([
-        'ip'              => $request->ip(),
-        'ips'             => $request->ips(),
-        'x_forwarded_for' => $request->header('X-Forwarded-For'),
-        'remote_addr'     => $request->server('REMOTE_ADDR'),
-    ]);
-});
 
 // Protected
 Route::middleware('auth:sanctum')->group(function(){
