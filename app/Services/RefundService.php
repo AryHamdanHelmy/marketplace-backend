@@ -19,7 +19,7 @@ use RuntimeException;
  * terlihat pembeli, catatan siapa mentransfer dengan bukti apa, dan satu entri
  * ledger yang bisa direkonsiliasi.
  *
- * Dua aturan yang menentukan bentuknya:
+ * Tiga aturan yang menentukan bentuknya:
  *
  *   1. Saldo seller tidak pernah bertambah karena refund. Pada alur ini seller
  *      memang belum pernah dikredit — kredit baru terjadi saat pesanan
@@ -28,7 +28,11 @@ use RuntimeException;
  *      SellerBalance; ia ada untuk rekonsiliasi, bukan untuk menggerakkan
  *      angka.
  *
- *   2. Pesanan yang sudah 'completed' tidak bisa direfund lewat jalur ini.
+ *   2. Stok hanya kembali untuk pesanan 'paid'. Pesanan 'shipped' barangnya
+ *      sudah keluar gudang, jadi menambah stok karena refund berarti menjual
+ *      barang yang secara fisik tidak ada.
+ *
+ *   3. Pesanan yang sudah 'completed' tidak bisa direfund lewat jalur ini.
  *      Uangnya sudah menjadi saldo seller, dan menariknya kembali adalah
  *      persoalan lain — bisa membuat saldo minus, dan seller mungkin sudah
  *      menariknya. Itu butuh alur tersendiri yang belum ada.
@@ -70,11 +74,19 @@ class RefundService
                 );
             }
 
-            // Stok dikembalikan di sini, bukan saat transfer selesai: barangnya
-            // batal terjual sejak keputusan diambil, dan menahannya sampai
-            // admin sempat mentransfer hanya membuat barang yang tersedia
-            // tampak habis.
-            $this->restock($order);
+            // Stok hanya kembali untuk pesanan yang belum dikirim.
+            //
+            // 'paid': barangnya masih di gudang dan batal terjual sejak
+            // keputusan diambil. Menahannya sampai admin sempat mentransfer
+            // hanya membuat barang yang tersedia tampak habis.
+            //
+            // 'shipped': barangnya sudah keluar gudang. Menambah stok di sini
+            // akan menjual barang yang secara fisik tidak ada. Kalau paketnya
+            // kembali, penambahan stok adalah keputusan seller setelah barang
+            // benar-benar diterima kembali — bukan efek samping dari refund.
+            if ($order->status === 'paid') {
+                $this->restock($order);
+            }
 
             $order->update([
                 'status' => 'refund_pending',
@@ -144,7 +156,8 @@ class RefundService
     }
 
     /**
-     * Kembalikan stok pesanan, urut product_id seperti di checkout dan cancel.
+     * Kembalikan stok pesanan yang belum dikirim, urut product_id seperti di
+     * checkout dan cancel.
      *
      * Urutan yang konsisten itulah yang mencegah dua proses restock saling
      * mengunci.

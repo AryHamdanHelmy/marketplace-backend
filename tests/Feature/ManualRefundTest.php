@@ -95,6 +95,82 @@ class ManualRefundTest extends TestCase
         return $order;
     }
 
+    public function test_stok_kembali_untuk_pesanan_paid(): void
+    {
+        $order = $this->paidOrder('paid');
+
+        Sanctum::actingAs($this->admin);
+
+        $this->postJson("/api/admin/orders/{$order->id}/refund-pending", ['reason' => 'Dibatalkan pembeli'])
+            ->assertOk();
+
+        // 7 tersisa + 3 yang dipesan
+        $this->assertSame(10, $this->product->fresh()->stock);
+    }
+
+    public function test_stok_tidak_kembali_untuk_pesanan_shipped(): void
+    {
+        $order = $this->paidOrder('shipped');
+
+        Sanctum::actingAs($this->admin);
+
+        $this->postJson("/api/admin/orders/{$order->id}/refund-pending", ['reason' => 'Paket hilang di kurir'])
+            ->assertOk();
+
+        // Barangnya sudah keluar gudang. Menambah stok di sini berarti menjual
+        // barang yang secara fisik tidak ada.
+        $this->assertSame(7, $this->product->fresh()->stock);
+
+        $this->patchJson("/api/admin/refunds/{$order->id}/refunded", ['transfer_reference' => 'REF-9'])
+            ->assertOk();
+
+        // Juga tidak kembali saat transfer selesai.
+        $this->assertSame(7, $this->product->fresh()->stock);
+    }
+
+    public function test_auto_complete_melewati_pesanan_yang_menunggu_refund(): void
+    {
+        $order = $this->paidOrder('shipped');
+        $order->forceFill(['shipped_at' => now()->subDays(30)])->save();
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/admin/orders/{$order->id}/refund-pending", ['reason' => 'Paket hilang'])
+            ->assertOk();
+
+        // Jendela konfirmasi sudah lewat jauh. Tanpa penjagaan, job ini akan
+        // menutup pesanannya sebagai selesai dan mengkredit saldo seller —
+        // untuk pesanan yang uangnya justru sedang dikembalikan ke pembeli.
+        $this->artisan('orders:auto-complete')->assertSuccessful();
+
+        $order->refresh();
+
+        $this->assertSame('refund_pending', $order->status);
+        $this->assertNull($order->completed_at);
+        $this->assertSame(
+            0,
+            BalanceLog::where('transaction_id', $order->id)->where('type', 'credit')->count(),
+            'Pesanan yang menunggu refund tidak boleh mengkredit saldo seller.'
+        );
+    }
+
+    public function test_auto_complete_melewati_pesanan_yang_sudah_direfund(): void
+    {
+        $order = $this->paidOrder('shipped');
+        $order->forceFill(['shipped_at' => now()->subDays(30)])->save();
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/admin/orders/{$order->id}/refund-pending", ['reason' => 'Paket hilang'])->assertOk();
+        $this->patchJson("/api/admin/refunds/{$order->id}/refunded", ['transfer_reference' => 'REF-1'])->assertOk();
+
+        $this->artisan('orders:auto-complete')->assertSuccessful();
+
+        $this->assertSame('refunded', $order->fresh()->status);
+        $this->assertSame(
+            0,
+            BalanceLog::where('transaction_id', $order->id)->where('type', 'credit')->count()
+        );
+    }
+
     public function test_alur_penuh_dari_antrean_sampai_tercatat(): void
     {
         $order = $this->paidOrder();
