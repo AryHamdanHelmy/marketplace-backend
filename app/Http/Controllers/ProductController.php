@@ -124,11 +124,15 @@ class ProductController extends Controller
                 'description' => 'nullable|string',
                 'price'       => 'required|numeric|min:0',
                 'stock'       => 'nullable|integer|min:0',
-                'rating'      => 'nullable|numeric|min:0|max:10',
+                // rating dan download_count sengaja tidak ada di sini.
+                // Keduanya angka turunan: rating dihitung dari tabel reviews,
+                // download_count dari unduhan yang benar-benar terjadi.
+                // Selama keduanya bisa dikirim seller, siapa pun bisa
+                // menerbitkan produk bintang 5 pada hari pertama — dan
+                // 'Top Rated' di formatProduct() kehilangan artinya.
                 'status'      => 'nullable|in:draft,active,inactive',
                 'weight_grams' => 'nullable|integer|min:1|max:500000',
                 'file_path'   => 'nullable|string',
-                'download_count' => 'nullable|integer|min:0',
                 'thumbnail'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -213,11 +217,12 @@ class ProductController extends Controller
             'description'    => 'nullable|string',
             'price'          => 'sometimes|numeric|min:0',
             'stock'          => 'nullable|integer|min:0',
-            'rating'         => 'nullable|numeric|min:0|max:5',
+            // Sama seperti store(): rating dan download_count bukan milik
+            // seller. Versi sebelumnya bahkan tidak konsisten — store()
+            // menerima sampai 10, update() sampai 5.
             'status'         => 'nullable|in:draft,active,inactive',
             'weight_grams' => 'nullable|integer|min:1|max:500000',
             'file_path'      => 'nullable|string',
-            'download_count' => 'nullable|integer|min:0',
             'thumbnail'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 

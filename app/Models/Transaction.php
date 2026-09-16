@@ -24,7 +24,12 @@ class Transaction extends Model
         'tracking_snapshot',
         'tracking_checked_at',
         'shipped_at',
-        'complated_at',
+        // Sebelumnya tertulis 'complated_at' — kolom yang tidak ada. Akibatnya
+        // completed_at tidak pernah lolos mass assignment dan update() dari
+        // OrderController::confirmReceipt() maupun CompleteShippedOrders
+        // membuangnya diam-diam: setiap pesanan selesai punya completed_at
+        // NULL, dan jejak kapan uang dilepas ke seller hilang.
+        'completed_at',
         'completed_by',
         'cancelled_at',
     ];
