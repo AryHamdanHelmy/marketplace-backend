@@ -35,6 +35,9 @@ class Withdrawal extends Model
         return [
             'amount' => 'decimal:2',
             'processed_at' => 'datetime',
+            // Sama seperti Store: disalin saat penarikan dibuat, jadi harus
+            // dilindungi di tempat yang sama pula.
+            'bank_account_number' => 'encrypted',
         ];
     }
 
@@ -66,7 +69,7 @@ class Withdrawal extends Model
 
     public function getMaskedAccountNumberAttribute(): ?string
     {
-        $number = $this->attributes['bank_account_number'] ?? null;
+        $number = $this->bank_account_number;
 
         return $number ? '•••• ' . substr($number, -4) : null;
     }

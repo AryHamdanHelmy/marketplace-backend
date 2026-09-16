@@ -61,8 +61,18 @@ class Transaction extends Model
         return $this->belongsTo(User::class, 'seller_id');
     }
 
+    /**
+     * Hanya pesanan yang belum dibayar yang boleh dibatalkan sendiri.
+     *
+     * Sebelumnya status 'paid' ikut di sini. Membatalkannya mengembalikan
+     * stok dan menandai pesanan 'cancelled', tapi tidak ada satu pun jalur
+     * refund di aplikasi ini: PaymentOrder tetap 'paid' dan uang pembeli
+     * mengendap tanpa catatan kewajiban. Sampai alur refund benar-benar ada,
+     * pembatalan pesanan berbayar adalah urusan dukungan, bukan tombol yang
+     * bisa ditekan sendiri.
+     */
     public function isCancellable(): bool
     {
-        return in_array($this->status, ['pending', 'paid']);
+        return $this->status === 'pending';
     }
 }
