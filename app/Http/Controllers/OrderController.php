@@ -301,6 +301,13 @@ class OrderController extends Controller
             'shipped_at'     => $trx->shipped_at,
             'completed_at'   => $trx->completed_at,
             'cancelled_at'   => $trx->cancelled_at,
+
+            // Pembeli yang pesanannya sedang direfund perlu melihat statusnya
+            // bergerak. Tanpa ini, satu-satunya tanda adalah uang yang belum
+            // kembali.
+            'refund_reason'       => $trx->refund_reason,
+            'refund_requested_at' => $trx->refund_requested_at,
+            'refunded_at'         => $trx->refunded_at,
             'created_at'     => $trx->created_at,
             'is_cancellable' => $trx->isCancellable(),
             'payment'        => $trx->payment ? [

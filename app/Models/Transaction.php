@@ -32,6 +32,11 @@ class Transaction extends Model
         'completed_at',
         'completed_by',
         'cancelled_at',
+        'refund_reason',
+        'refund_reference',
+        'refund_requested_at',
+        'refunded_at',
+        'refunded_by',
     ];
 
     protected $casts = [
@@ -43,6 +48,8 @@ class Transaction extends Model
         'shipped_at'          => 'datetime',
         'paid_at'      => 'datetime',
         'cancelled_at' => 'datetime',
+        'refund_requested_at' => 'datetime',
+        'refunded_at'         => 'datetime',
         'completed_at'     => 'datetime',
     ];
 
@@ -64,6 +71,16 @@ class Transaction extends Model
     public function seller()
     {
         return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    public function refundedBy()
+    {
+        return $this->belongsTo(User::class, 'refunded_by');
+    }
+
+    public function isRefundable(): bool
+    {
+        return in_array($this->status, ['paid', 'shipped']);
     }
 
     /**
