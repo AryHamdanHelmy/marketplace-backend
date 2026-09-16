@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
@@ -77,6 +79,16 @@ class AuthController extends Controller
         ], 201);
     }
 
+    // Percobaan gagal dihitung per akun, bukan hanya per IP.
+    //
+    // Throttle di route terikat IP. Penyerang dengan 100 IP karena itu
+    // mendapat 500 percobaan per menit pada satu akun yang sama — throttle
+    // route-nya tidak pernah tersentuh. Dua kunci di bawah menutup itu: satu
+    // mengikat kombinasi email+IP, satu lagi mengikat email saja sehingga
+    // serangan yang tersebar di banyak IP tetap terbentur batas.
+    private const LOGIN_MAX_PER_IP = 5;
+    private const LOGIN_MAX_PER_ACCOUNT = 20;
+
     public function login(Request $request)
     {
         $validated = $request->validate([
@@ -84,13 +96,33 @@ class AuthController extends Controller
             "password" => "required",
         ]);
 
+        [$ipKey, $accountKey] = $this->loginKeys($request, $validated["email"]);
+
+        foreach ([[$ipKey, self::LOGIN_MAX_PER_IP], [$accountKey, self::LOGIN_MAX_PER_ACCOUNT]] as [$key, $max]) {
+            if (RateLimiter::tooManyAttempts($key, $max)) {
+                return response()->json([
+                    "message" => "Too many sign-in attempts. Try again in "
+                        . RateLimiter::availableIn($key) . " seconds.",
+                ], 429);
+            }
+        }
+
         $user = User::where("email", $validated["email"])->first();
 
         if (!$user || !Hash::check($validated["password"], $user->password)) {
+            RateLimiter::hit($ipKey, 60);
+            RateLimiter::hit($accountKey, 900);
+
             return response()->json([
                 "message" => "That email and password don't match.",
             ], 401);
         }
+
+        // Login yang berhasil membersihkan hitungannya. Kalau tidak, orang
+        // yang salah ketik beberapa kali lalu berhasil masuk tetap terkunci
+        // pada percobaan berikutnya.
+        RateLimiter::clear($ipKey);
+        RateLimiter::clear($accountKey);
 
         $token = $user->createToken("auth_token")->plainTextToken;
 
@@ -98,6 +130,19 @@ class AuthController extends Controller
             "user" => $user,
             "token" => $token,
         ]);
+    }
+
+    /**
+     * @return array{0: string, 1: string} kunci email+IP dan kunci email saja
+     */
+    private function loginKeys(Request $request, string $email): array
+    {
+        $email = Str::transliterate(Str::lower(trim($email)));
+
+        return [
+            "login:{$email}|" . $request->ip(),
+            "login:{$email}",
+        ];
     }
 
     public function logout(Request $request)

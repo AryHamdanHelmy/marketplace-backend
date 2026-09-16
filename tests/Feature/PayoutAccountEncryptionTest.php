@@ -79,6 +79,49 @@ class PayoutAccountEncryptionTest extends TestCase
             ->assertJsonPath('data.masked_account_number', '•••• 8899');
     }
 
+    public function test_migrasi_aman_pada_tabel_campuran_polos_dan_terenkripsi(): void
+    {
+        // Keadaan produksi setelah sebagian baris sempat tersentuh: satu baris
+        // sudah terenkripsi, satu lagi belum. Migrasi harus menyelesaikan yang
+        // tertinggal tanpa merusak yang sudah benar — kalau baris terenkripsi
+        // ikut dienkripsi ulang, nomornya tidak akan pernah terbaca lagi.
+        $sudah = User::factory()->seller()->create();
+        $belum = User::factory()->seller()->create();
+
+        Store::create([
+            'seller_id' => $sudah->id,
+            'name' => 'Toko Sudah',
+            'bank_name' => 'BCA',
+            'bank_account_number' => '1111111111',
+            'bank_account_holder' => 'A',
+        ]);
+
+        $idBelum = DB::table('stores')->insertGetId([
+            'seller_id' => $belum->id,
+            'name' => 'Toko Belum',
+            'slug' => 'toko-belum',
+            'bank_name' => 'BNI',
+            'bank_account_number' => '2222222222',
+            'bank_account_holder' => 'B',
+            'is_open' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $migration = require database_path('migrations/2026_09_15_000003_encrypt_bank_account_numbers.php');
+        $migration->up();
+
+        $this->assertSame('1111111111', Store::where('seller_id', $sudah->id)->first()->bank_account_number);
+        $this->assertSame('2222222222', Store::find($idBelum)->bank_account_number);
+
+        // Dan sekali lagi, karena entrypoint kini menjalankan migrate pada
+        // setiap start container.
+        $migration->up();
+
+        $this->assertSame('1111111111', Store::where('seller_id', $sudah->id)->first()->bank_account_number);
+        $this->assertSame('2222222222', Store::find($idBelum)->bank_account_number);
+    }
+
     public function test_migrasi_mengenkripsi_baris_lama_yang_masih_polos(): void
     {
         $seller = User::factory()->seller()->create();

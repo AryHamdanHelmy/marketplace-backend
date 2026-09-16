@@ -78,11 +78,26 @@ class CartController extends Controller
             $item->quantity = $finalQty;
             $item->save();
         } else {
-            $item = CartItem::create([
-                'user_id' => $request->user()->id,
-                'product_id' => $validated['product_id'],
-                'quantity' => $addQty,
-            ]);
+            // Dua request yang datang bersamaan sama-sama melihat cart kosong
+            // untuk produk ini, lalu sama-sama insert — yang kalah menabrak
+            // unique (user_id, product_id) dan dulu berakhir sebagai 500.
+            // updateOrCreate menyerahkan penyelesaiannya ke database.
+            try {
+                $item = CartItem::create([
+                    'user_id' => $request->user()->id,
+                    'product_id' => $validated['product_id'],
+                    'quantity' => $addQty,
+                ]);
+            } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+                $item = CartItem::where('user_id', $request->user()->id)
+                    ->where('product_id', $validated['product_id'])
+                    ->first();
+
+                if ($item) {
+                    $item->quantity = min($item->quantity + $addQty, $product->stock);
+                    $item->save();
+                }
+            }
         }
 
         return response()->json([

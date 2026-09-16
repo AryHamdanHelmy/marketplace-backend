@@ -21,6 +21,14 @@ class ProductImportController extends Controller
     // GET /api/products/import/template
     public function downloadTemplate()
     {
+        // Satu-satunya endpoint di modul import yang tidak memeriksa role.
+        if (!in_array(auth()->user()->role, ['seller', 'admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya seller yang dapat mengimport product',
+            ], 403);
+        }
+
         $spreadsheet = new Spreadsheet();
 
         // --- Sheet 1: form pengisian ---
@@ -110,7 +118,12 @@ class ProductImportController extends Controller
         $spreadsheet->setActiveSheetIndex(0);
 
         $fileName = 'template-produk-' . now()->format('Ymd') . '.xlsx';
-        $tempPath = storage_path('app/' . $fileName);
+
+        // Nama file sementara harus unik per request. Sebelumnya namanya
+        // hanya berbasis tanggal, jadi dua seller yang mengunduh bersamaan
+        // saling menimpa berkas yang sedang dikirim — atau lebih buruk,
+        // deleteFileAfterSend menghapus berkas milik request tetangga.
+        $tempPath = tempnam(sys_get_temp_dir(), 'tpl-produk-');
 
         (new Xlsx($spreadsheet))->save($tempPath);
 
@@ -261,6 +274,17 @@ class ProductImportController extends Controller
         try {
             $spreadsheet = IOFactory::load($file->getRealPath());
             $sheet = $spreadsheet->getSheetByName('Products') ?? $spreadsheet->getSheet(0);
+
+            // Dimensi diperiksa sebelum toArray(). Batas MAX_ROWS dulu baru
+            // berlaku setelah seluruh sheet jadi array PHP — file .xlsx 3 MB
+            // yang sah bisa mengembang jadi ratusan ribu baris di memori
+            // sebelum baris pertama sempat dihitung.
+            $highestRow = $sheet->getHighestDataRow();
+
+            if ($highestRow > self::MAX_ROWS + 1) {
+                return ['error' => 'Maksimal ' . self::MAX_ROWS . ' baris per file'];
+            }
+
             $data  = $sheet->toArray(null, true, true, true);
         } catch (\Throwable $e) {
             return ['error' => 'File tidak bisa dibaca. Pastikan formatnya .xlsx'];

@@ -18,3 +18,7 @@ Artisan::command('inspire', function () {
 Schedule::command('orders:auto-complete')->dailyAt('02:00')->withoutOverlapping();
 Schedule::command('payments:expire')->hourly()->withoutOverlapping();
 Schedule::command('shipping:poll')->hourly()->withoutOverlapping();
+
+// Token kedaluwarsa tidak hilang sendiri dari tabelnya. Tanpa ini,
+// personal_access_tokens terus tumbuh meski tokennya sudah tidak berlaku.
+Schedule::command('sanctum:prune-expired --hours=24')->daily()->withoutOverlapping();
